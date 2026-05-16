@@ -1,0 +1,55 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-accent: #6d28d9;
+  --color-accent-glow: rgba(109, 40, 217, 0.2);
+  --color-bg-light: #ffffff;
+  --color-card-bg: rgba(255, 255, 255, 0.8);
+}
+
+@layer base {
+  body {
+    @apply bg-bg-light text-slate-900 antialiased;
+  }
+
+  /* Custom Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-200 rounded-full hover:bg-slate-300;
+  }
+}
+
+.glow-text {
+  text-shadow: 0 0 10px var(--color-accent-glow);
+}
+
+.glow-border {
+  box-shadow: 0 0 15px var(--color-accent-glow);
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.scanline::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to bottom, transparent 0%, rgba(0, 242, 255, 0.05) 50%, transparent 100%);
+  animation: scanline 8s linear infinite;
+  pointer-events: none;
+}
+
