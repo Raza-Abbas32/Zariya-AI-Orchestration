@@ -20,11 +20,32 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import MapView from './components/MapView';
+import TrustAnalysisPanel from './components/TrustAnalysisPanel';
 import { ZariyaOrchestrator } from './services/orchestrator';
-import { OrchestrationState } from './types';
+import { OrchestrationState, AgentLog } from './types';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+function getRegionFromCoords(lat: number, lng: number): string {
+  const distance = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+    return Math.sqrt(Math.pow(lat1 - lat2, 2) + Math.pow(lng1 - lng2, 2));
+  };
+  const distKHI = distance(lat, lng, 24.8607, 67.0011);
+  const distLHE = distance(lat, lng, 31.5204, 74.3587);
+  const distISB = distance(lat, lng, 33.6844, 73.0479);
+
+  const inPak = lat >= 23.6 && lat <= 37.1 && lng >= 60.8 && lng <= 77.1;
+  if (!inPak) {
+    return "GLOBAL-01";
+  }
+
+  if (distKHI < 1.5) return "PK-KHI";
+  if (distLHE < 1.5) return "PK-LHE";
+  if (distISB < 1.5) return "PK-ISB";
+  
+  return "PK-01";
 }
 
 const INITIAL_STATE: OrchestrationState = {
@@ -41,12 +62,16 @@ const INITIAL_STATE: OrchestrationState = {
   history: [],
   isAwaitingSelection: false,
   bookingStage: 'idle',
-  userContact: ''
+  userContact: '',
+  messages: [],
+  sessionId: '',
+  regionCode: 'PK-01'
 };
 
 const AGENT_SEQUENCE = [
   'Communication',
   'Intent',
+  'Planning',
   'Discovery',
   'Trust',
   'Negotiation',
@@ -55,7 +80,47 @@ const AGENT_SEQUENCE = [
 ];
 
 export default function App() {
-  const [state, setState] = useState<OrchestrationState>(INITIAL_STATE);
+  const [state, setState] = useState<OrchestrationState>(() => {
+    let session = '';
+    try {
+      session = localStorage.getItem('zariya_session_id') || '';
+      if (!session) {
+        session = 'sess_' + Math.random().toString(36).substring(2, 15);
+        localStorage.setItem('zariya_session_id', session);
+      }
+    } catch (e) {
+      session = 'sess_' + Date.now();
+    }
+
+    try {
+      const saved = localStorage.getItem('zariya_state');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.history) {
+          parsed.history = parsed.history.map((h: any) => ({
+            ...h,
+            timestamp: new Date(h.timestamp)
+          }));
+        }
+        if (parsed.messages) {
+          parsed.messages = parsed.messages.map((m: any) => ({
+            ...m,
+            timestamp: new Date(m.timestamp)
+          }));
+        }
+        return { 
+          ...INITIAL_STATE, 
+          history: parsed.history || [], 
+          messages: parsed.messages || [],
+          sessionId: session
+        };
+      }
+    } catch (e) {
+      console.error("Failed to load state from local storage", e);
+    }
+    return { ...INITIAL_STATE, sessionId: session };
+  });
+
   const orchestrator = useRef<ZariyaOrchestrator | null>(null);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
   const [input, setInput] = useState('');
@@ -64,13 +129,67 @@ export default function App() {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Fetch user location on mount
+    const syncWithBackend = async () => {
+      try {
+        const apiPrefix = import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes('your-backend-url')
+          ? import.meta.env.VITE_API_URL
+          : (import.meta.env.PROD ? window.location.origin + '/api' : 'http://localhost:3001/api');
+
+        const bookingsRes = await fetch(`${apiPrefix}/bookings`);
+        if (bookingsRes.ok) {
+          const bookings = await bookingsRes.json();
+          const parsedBookings = bookings.map((b: any) => ({
+            id: b.id,
+            timestamp: new Date(b.timestamp),
+            service: b.intent?.service || b.provider?.specialty || 'Service',
+            location: b.intent?.location || b.provider?.location?.address || 'Location',
+            status: b.status === 'Pending' ? 'Processing' as const : 'Completed' as const,
+            providerName: b.provider?.name,
+            totalAmount: b.provider?.pricing?.total
+          }));
+
+          setState(s => {
+            const mergedMap = new Map();
+            parsedBookings.forEach((b: any) => mergedMap.set(b.id, b));
+            s.history.forEach((b: any) => mergedMap.set(b.id, b));
+            
+            const sortedHistory = Array.from(mergedMap.values()).sort(
+              (a: any, b: any) => b.timestamp.getTime() - a.timestamp.getTime()
+            );
+
+            return { ...s, history: sortedHistory };
+          });
+        }
+
+        if (state.sessionId) {
+          const sessionRes = await fetch(`${apiPrefix}/sessions/${state.sessionId}`);
+          if (sessionRes.ok) {
+            const sessionData = await sessionRes.json();
+            if (sessionData && sessionData.messages) {
+              const parsedMessages = sessionData.messages.map((m: any) => ({
+                ...m,
+                timestamp: new Date(m.timestamp)
+              }));
+              setState(s => ({ ...s, messages: parsedMessages }));
+            }
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to synchronize state with backend server:", e);
+      }
+    };
+
+    syncWithBackend();
+  }, [state.sessionId]);
+
+  useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
           const { latitude, longitude } = position.coords;
-          setState(s => ({ ...s, userLocation: { lat: latitude, lng: longitude } }));
-          console.log("User location acquired:", latitude, longitude);
+          const region = getRegionFromCoords(latitude, longitude);
+          setState(s => ({ ...s, userLocation: { lat: latitude, lng: longitude }, regionCode: region }));
+          console.log("User location acquired:", latitude, longitude, "Region:", region);
         },
         (error) => {
           console.error("Error fetching location:", error);
@@ -81,7 +200,18 @@ export default function App() {
 
   useEffect(() => {
     orchestrator.current = new ZariyaOrchestrator(state, setState);
-  }, [state.userLocation, state.history, state.intent, state.selectedProvider]);
+  }, [state.userLocation, state.intent, state.selectedProvider, state.messages]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('zariya_state', JSON.stringify({ 
+        history: state.history,
+        messages: state.messages
+      }));
+    } catch (e) {
+      console.error("Failed to save state to local storage", e);
+    }
+  }, [state.history, state.messages]);
 
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -96,25 +226,81 @@ export default function App() {
   const toggleVoice = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition not supported in this browser.");
+      const warningLog: AgentLog = {
+        id: Math.random().toString(36).substring(7),
+        timestamp: new Date(),
+        agent: 'System',
+        message: "Speech recognition is not supported in this browser. Fallback to Logical Input.",
+        type: 'warning'
+      };
+      setState(s => ({ ...s, logs: [...s.logs, warningLog] }));
       return;
     }
 
     if (!isVoiceMode) {
-      const recognition = new SpeechRecognition();
-      recognition.lang = 'en-US'; 
-      recognition.start();
-      setIsVoiceMode(true);
+      try {
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'ur-PK'; 
+        recognition.continuous = false;
+        recognition.interimResults = false;
+        
+        recognition.onstart = () => {
+          setIsVoiceMode(true);
+          const voiceLog: AgentLog = {
+            id: Math.random().toString(36).substring(7),
+            timestamp: new Date(),
+            agent: 'System',
+            message: "Neural audio capture active. Capture language set to Urdu (ur-PK)...",
+            type: 'info'
+          };
+          setState(s => ({ ...s, logs: [...s.logs, voiceLog] }));
+        };
+        
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setInput(transcript);
+          setIsVoiceMode(false);
+          
+          const successLog: AgentLog = {
+            id: Math.random().toString(36).substring(7),
+            timestamp: new Date(),
+            agent: 'System',
+            message: `Audio signal captured successfully: "${transcript}"`,
+            type: 'success'
+          };
+          setState(s => ({ ...s, logs: [...s.logs, successLog] }));
+          
+          orchestrator.current?.run(transcript);
+        };
 
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setInput(transcript);
+        recognition.onerror = (event: any) => {
+          console.error("Speech recognition error:", event.error);
+          setIsVoiceMode(false);
+          
+          const errorLog: AgentLog = {
+            id: Math.random().toString(36).substring(7),
+            timestamp: new Date(),
+            agent: 'System',
+            message: `Neural capture failed (${event.error}). Defaulting to logical keyboard input.`,
+            type: 'warning'
+          };
+          setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
+        };
+        
+        recognition.onend = () => setIsVoiceMode(false);
+        recognition.start();
+      } catch (e: any) {
+        console.error("Failed to start speech recognition:", e);
         setIsVoiceMode(false);
-        orchestrator.current?.run(transcript);
-      };
-
-      recognition.onerror = () => setIsVoiceMode(false);
-      recognition.onend = () => setIsVoiceMode(false);
+        const errorLog: AgentLog = {
+          id: Math.random().toString(36).substring(7),
+          timestamp: new Date(),
+          agent: 'System',
+          message: `Voice Initialization error: ${e.message}. Defaulting to logical keyboard input.`,
+          type: 'warning'
+        };
+        setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
+      }
     }
   };
 
@@ -125,6 +311,18 @@ export default function App() {
   };
 
   const handleFinalDispatch = () => {
+    const phoneRegex = /^03\d{2}-?\d{7}$/;
+    if (!phoneRegex.test(contactInput)) {
+      const errorLog: AgentLog = {
+        id: Math.random().toString(36).substring(7),
+        timestamp: new Date(),
+        agent: 'Orchestrator',
+        message: "Dispatch Error: Invalid contact format. Please enter a valid Pakistani phone number (e.g. 0300-1234567).",
+        type: 'warning'
+      };
+      setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
+      return;
+    }
     if (state.selectedProvider && contactInput.trim()) {
       orchestrator.current?.confirmSelection(state.selectedProvider, contactInput);
     }
@@ -143,7 +341,7 @@ export default function App() {
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-2 text-[8px] font-black text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-1 rounded-full border border-slate-100">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-            PK-01
+            {state.regionCode}
           </div>
         </div>
       </header>
@@ -247,7 +445,7 @@ export default function App() {
                     <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-2">
                        <div className="hidden sm:flex items-center gap-2 text-[10px] font-black text-slate-400 uppercase tracking-widest border border-slate-100 px-3 py-1 rounded-full">
                         <Globe className="w-3 h-3" />
-                        Region: <span className="text-slate-900">Pakistan-01</span>
+                        Region: <span className="text-slate-900">{state.regionCode}</span>
                        </div>
                        <button 
                         onClick={handleStart}
@@ -312,6 +510,7 @@ export default function App() {
                                 <div className="flex items-center gap-3 mt-1">
                                   <span className="text-[10px] font-black text-accent uppercase tracking-tighter bg-accent/5 px-2 py-0.5 rounded-lg">{p.specialty}</span>
                                   <span className="text-[10px] text-slate-400 font-bold">{p.rating} ★</span>
+                                  <span className="text-[10px] text-emerald-500 font-black">{(p.trustScore * 100).toFixed(0)}% TRUST</span>
                                 </div>
                               </div>
                             </div>
@@ -414,27 +613,39 @@ export default function App() {
 
                 {/* Log Stream - Integrated smoothly */}
                 <div className="flex-1 bg-slate-900 rounded-[24px] md:rounded-[32px] p-6 shadow-2xl overflow-hidden flex flex-col min-h-[300px]">
-                   <div className="flex items-center gap-2 mb-4">
-                      <Activity className="w-4 h-4 text-emerald-500" />
-                      <span className="text-xs font-black tracking-widest uppercase text-slate-500">Live Telemetry</span>
-                    </div>
-                    <div className="flex-1 overflow-y-auto space-y-3 font-mono text-[10px] pr-2">
-                       {state.logs.map((log) => (
-                        <div key={log.id} className="flex gap-3">
-                          <span className="text-slate-600 opacity-50">[{log.timestamp.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                          <span className={cn(
-                            "flex-1",
-                            log.type === 'success' ? "text-accent font-bold" : 
-                            log.type === 'error' ? "text-red-400" : "text-slate-400"
-                          )}>
-                            <span className="text-slate-500 font-bold mr-2 uppercase">[{log.agent.substring(0,3)}]</span>
-                            {log.message}
-                          </span>
+                       <div className="flex items-center gap-2 mb-4">
+                          <Activity className="w-4 h-4 text-emerald-500" />
+                          <span className="text-xs font-black tracking-widest uppercase text-slate-500">Live Telemetry</span>
+                        </div>
+                        
+                        <div className="flex-1 overflow-y-auto space-y-4 font-mono text-[10px] pr-2">
+                           {state.logs.map((log) => (
+                        <div key={log.id} className="flex flex-col gap-1 border-l border-slate-800 pl-3 py-1">
+                          <div className="flex gap-3">
+                            <span className="text-slate-600 opacity-50">[{log.timestamp.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
+                            <span className={cn(
+                              "flex-1",
+                              log.type === 'success' ? "text-accent font-bold" : 
+                              log.type === 'error' ? "text-red-400" : "text-slate-400"
+                            )}>
+                              <span className="text-slate-500 font-bold mr-2 uppercase">[{log.agent.substring(0,3)}]</span>
+                              {log.message}
+                            </span>
+                          </div>
+                          {log.reasoning && (
+                            <div className="text-[9px] text-slate-500 italic mt-1 leading-relaxed border-t border-slate-800/50 pt-1">
+                              ↳ reasoning: {log.reasoning}
+                            </div>
+                          )}
                         </div>
                       ))}
                       <div ref={logsEndRef} />
                     </div>
-                </div>
+
+                 </div>
+
+                 {/* Trust Analysis Panel - New Extension */}
+                 <TrustAnalysisPanel provider={state.selectedProvider} />
               </div>
             </div>
           </div>
@@ -622,7 +833,12 @@ export default function App() {
 
                    <div className="space-y-4 px-4">
                       <h2 className="text-3xl md:text-5xl font-black tracking-tighter">Confirmed</h2>
-                      <p className="text-white/70 font-medium text-base md:text-lg leading-relaxed">Agent has been dispatched and is currently navigating the spatial grid to reach your location.</p>
+                      <div className="inline-flex items-center gap-2 bg-white/20 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-widest mb-4">
+                        <ShieldCheck className="w-4 h-4" />
+                        Status: Confirmed
+                      </div>
+                      <p className="text-white/70 font-medium text-base md:text-lg leading-relaxed">Agent has been dispatched and is currently navigating the spatial grid to reach your location. A confirmation email has been sent to you.</p>
+                      <div className="text-xs font-mono opacity-50 bg-black/20 p-2 rounded-lg inline-block">ID: {state.bookingId}</div>
                    </div>
 
                    <div className="bg-white/10 backdrop-blur-md rounded-[24px] md:rounded-[32px] p-6 md:p-8 border border-white/20 space-y-4 md:space-y-6 mx-4">
@@ -636,11 +852,15 @@ export default function App() {
                         </div>
                       </div>
                       <div className="h-px bg-white/10" />
-                      <div className="flex items-center gap-3 text-xs md:text-sm font-bold text-white/80">
-                         <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
-                         Target: {state.intent?.location}
-                      </div>
-                   </div>
+                       <div className="flex items-center gap-3 text-xs md:text-sm font-bold text-white/80">
+                          <div className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+                          Target: {state.intent?.location}
+                       </div>
+                       <div className="flex items-center gap-3 text-xs md:text-sm font-bold text-white/60 pt-2 border-t border-white/5">
+                          <ShieldCheck className="w-4 h-4" />
+                          Autonomous Follow-Up Scheduled
+                       </div>
+                    </div>
 
                    <button 
                     onClick={() => setState(s => ({ ...s, bookingStage: 'idle', selectedProvider: null, providers: [], intent: null, bookingId: null, isProcessing: false }))}

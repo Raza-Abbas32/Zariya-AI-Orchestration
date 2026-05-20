@@ -1,0 +1,122 @@
+[
+  {
+    "id": "ZAR-IXEVVF0",
+    "provider": {
+      "id": "P2",
+      "name": "Smart Fix Solutions",
+      "location": {
+        "lat": 27.565833612715096,
+        "lng": 68.20926230270351,
+        "address": "Peco Road, Model Town, Lahore"
+      },
+      "trustScore": 0.991330644092677,
+      "distance": "2.4km",
+      "availability": "Immediate",
+      "eta": "31 mins",
+      "rating": 4.5,
+      "avatar": "",
+      "pricing": {
+        "serviceFee": 700,
+        "partsEst": 100,
+        "total": 800
+      },
+      "metrics": {
+        "reliability": "91%",
+        "consistency": "98%",
+        "cancellationHistory": "3%",
+        "responseRate": "99%"
+      },
+      "specialty": "Plumber"
+    },
+    "customerContact": "03132928759",
+    "intent": {
+      "service": "Plumber",
+      "location": "Model Town, Lahore",
+      "urgency": "NORMAL",
+      "time": "ASAP",
+      "language": "English"
+    },
+    "status": "Pending",
+    "timestamp": "2026-05-16T15:29:47.643Z"
+  },
+  {
+    "id": "ZAR-PBK12ZQ",
+    "provider": {
+      "id": "P3",
+      "name": "Siddique & Sons",
+      "location": {
+        "lat": 27.559640420110522,
+        "lng": 68.21254053741582,
+        "address": "Link Road, Model Town, Lahore"
+      },
+      "trustScore": 0.8266806196197585,
+      "distance": "4.3km",
+      "availability": "Within 1 hour",
+      "eta": "23 mins",
+      "rating": 4.2,
+      "avatar": "",
+      "pricing": {
+        "serviceFee": 400,
+        "partsEst": 300,
+        "total": 700
+      },
+      "metrics": {
+        "reliability": "90%",
+        "consistency": "99%",
+        "cancellationHistory": "0%",
+        "responseRate": "90%"
+      },
+      "specialty": "Plumber"
+    },
+    "customerContact": "03001234567",
+    "intent": {
+      "service": "Plumber",
+      "location": "Model Town, Lahore",
+      "urgency": "NORMAL",
+      "time": "ASAP",
+      "language": "English"
+    },
+    "status": "Pending",
+    "timestamp": "2026-05-16T15:36:23.056Z"
+  },
+  {
+    "id": "ZAR-BJOXS6Z",
+    "provider": {
+      "id": "P2",
+      "name": "Smart Fix Solutions",
+      "location": {
+        "lat": 27.560797860741328,
+        "lng": 68.19794975031787,
+        "address": "Peco Road, Model Town, Lahore"
+      },
+      "trustScore": 0.7165979621434972,
+      "distance": "4.5km",
+      "availability": "Within 1 hour",
+      "eta": "28 mins",
+      "rating": 4.5,
+      "avatar": "",
+      "pricing": {
+        "serviceFee": 700,
+        "partsEst": 100,
+        "total": 800
+      },
+      "metrics": {
+        "reliability": "97%",
+        "consistency": "82%",
+        "cancellationHistory": "1%",
+        "responseRate": "91%"
+      },
+      "specialty": "Plumber"
+    },
+    "customerContact": "03132928792",
+    "intent": {
+      "service": "Plumber",
+      "location": "Model Town, Lahore",
+      "urgency": "NORMAL",
+      "time": "ASAP",
+      "language": "English"
+    },
+    "status": "Pending",
+    "timestamp": "2026-05-16T15:48:03.292Z"
+  }
+]

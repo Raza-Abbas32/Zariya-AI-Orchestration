@@ -28,6 +28,8 @@ export interface Provider {
   metrics: {
     reliability: string;
     consistency: string;
+    cancellationHistory: string;
+    responseRate: string;
   };
   specialty: string;
 }
@@ -57,7 +59,14 @@ export interface AgentLog {
   timestamp: Date;
   agent: string;
   message: string;
+  reasoning?: string; // Detailed AI reasoning
   type: 'info' | 'success' | 'warning' | 'error';
+}
+
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: Date;
 }
 
 export interface OrchestrationState {
@@ -75,4 +84,8 @@ export interface OrchestrationState {
   isAwaitingSelection: boolean;
   bookingStage: 'idle' | 'discovery' | 'selection' | 'form' | 'success';
   userContact: string;
+  planningSteps?: string[];
+  messages: ChatMessage[];
+  sessionId: string;
+  regionCode: string;
 }
