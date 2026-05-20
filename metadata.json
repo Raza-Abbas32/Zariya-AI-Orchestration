@@ -1,0 +1,6 @@
+{
+  "name": "Zariya AI Orchestration",
+  "description": "Multi-agent AI orchestration system for Pakistan's informal economy, transforming voice and text into autonomous service workflows.",
+  "requestFramePermissions": ["microphone", "geolocation"],
+  "majorCapabilities": []
+}

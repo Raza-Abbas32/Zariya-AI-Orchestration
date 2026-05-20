@@ -1,0 +1,41 @@
+services:
+  # Backend API Web Service
+  - type: web
+    name: zariya-backend
+    env: node
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: node server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MONGODB_URI
+        sync: false
+      - key: SMTP_HOST
+        value: smtp.ethereal.email
+      - key: SMTP_PORT
+        value: 587
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+
+  # Frontend Static Site
+  - type: web
+    name: zariya-frontend
+    env: static
+    plan: free
+    buildCommand: npm install && npm run build
+    publishPath: dist
+    envVars:
+      - key: VITE_API_URL
+        fromService:
+          name: zariya-backend
+          type: web
+          property: url
