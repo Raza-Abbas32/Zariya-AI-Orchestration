@@ -79,7 +79,7 @@ export interface OrchestrationState {
   logs: AgentLog[];
   currentAgent: string | null;
   timeline: Record<string, AgentStatus>;
-  userLocation: { lat: number; lng: number } | null;
+  userLocation: LocationData | null;
   history: BookingHistory[];
   isAwaitingSelection: boolean;
   bookingStage: 'idle' | 'discovery' | 'selection' | 'form' | 'success';

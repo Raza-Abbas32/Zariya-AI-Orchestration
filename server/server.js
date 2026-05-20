@@ -323,6 +323,39 @@ app.post('/api/auth/login', authLimiter, async (req, res, next) => {
   }
 });
 
+// Get all registered users (for admin or observability)
+app.get('/api/users', authenticateToken, async (req, res, next) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: "Access denied. Admin role required." });
+  }
+
+  try {
+    let usersList = [];
+    if (useMongoDB) {
+      const dbUsers = await User.find({}, '-password');
+      usersList = dbUsers.map(u => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        specialty: u.specialty
+      }));
+    } else {
+      const fileUsers = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
+      usersList = fileUsers.map(u => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+        specialty: u.specialty
+      }));
+    }
+    res.json(usersList);
+  } catch (err) {
+    next(err);
+  }
+});
+
 // Booking status update endpoint (for providers or admin)
 app.patch('/api/bookings/:bookingId/status', authenticateToken, async (req, res, next) => {
   const { bookingId } = req.params;

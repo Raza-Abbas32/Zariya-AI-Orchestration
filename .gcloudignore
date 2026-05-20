@@ -1,0 +1,13 @@
+.git
+.gitignore
+node_modules
+*.log
+*.md
+.env
+.env.*
+!.env.example
+dist
+.vscode
+deploy-gcp.ps1
+gcp-deployment.md
+PLAN.md

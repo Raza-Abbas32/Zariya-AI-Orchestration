@@ -160,12 +160,49 @@ export class IntentAgent {
       detectedLocation = randomLocations[Math.floor(Math.random() * randomLocations.length)];
     }
 
+    // Comprehensive multi-service keyword detection (English + Urdu/Roman Urdu)
+    const detectService = (input: string): string => {
+      const i = input.toLowerCase();
+      // Electrician
+      if (i.includes('electric') || i.includes('bijli') || i.includes('short circuit') || i.includes('wiring') || i.includes('wire') || i.includes('fan repair') || i.includes('light fix') || i.includes('switchboard') || i.includes('mcb') || i.includes('circuit')) return 'Electrician';
+      // AC / HVAC
+      if (i.includes('ac ') || i.includes('air condition') || i.includes('ac repair') || i.includes('cooling') || i.includes('a/c') || i.includes('hvac') || i.includes('heat pump') || i.includes('ac gas') || i.includes('compressor') || i.includes('inverter ac')) return 'AC Repair';
+      // Carpenter
+      if (i.includes('carpenter') || i.includes('wood') || i.includes('furniture') || i.includes('door fix') || i.includes('cupboard') || i.includes('almari') || i.includes('darz') || i.includes('wardrobe') || i.includes('cabinet') || i.includes('bed repair')) return 'Carpenter';
+      // Painter
+      if (i.includes('paint') || i.includes('rang') || i.includes('wall color') || i.includes('plastering') || i.includes('whitewash') || i.includes('polish') || i.includes('wall paint') || i.includes('putty')) return 'Painter';
+      // Pest Control
+      if (i.includes('pest') || i.includes('cockroach') || i.includes('termite') || i.includes('insect') || i.includes('rat') || i.includes('deemak') || i.includes('mosquito spray') || i.includes('fumigation') || i.includes('dengue')) return 'Pest Control';
+      // Cleaner / Maid
+      if (i.includes('clean') || i.includes('maid') || i.includes('sweep') || i.includes('dust') || i.includes('safai') || i.includes('washing') || i.includes('laundry') || i.includes('kaam wali') || i.includes('housekeeping')) return 'House Cleaner';
+      // Generator / UPS
+      if (i.includes('generator') || i.includes('genset') || i.includes('ups') || i.includes('inverter') || i.includes('battery') || i.includes('solar panel') || i.includes('solar install') || i.includes('power backup')) return 'Generator / UPS Technician';
+      // Mason / Civil
+      if (i.includes('mason') || i.includes('tile') || i.includes('cement') || i.includes('construction') || i.includes('wall crack') || i.includes('seepage') || i.includes('leakage') || i.includes('waterproof') || i.includes('rajayi')) return 'Mason';
+      // Welder
+      if (i.includes('weld') || i.includes('iron gate') || i.includes('grill') || i.includes('railing') || i.includes('metal') || i.includes('steel door') || i.includes('loha')) return 'Welder';
+      // Security
+      if (i.includes('cctv') || i.includes('camera') || i.includes('security') || i.includes('alarm') || i.includes('lock install') || i.includes('digital lock') || i.includes('surveillance')) return 'Security System Installer';
+      // Gardener
+      if (i.includes('garden') || i.includes('plant') || i.includes('lawn') || i.includes('grass cut') || i.includes('tree trim') || i.includes('mali') || i.includes('gardening')) return 'Gardener';
+      // Driver
+      if (i.includes('driver') || i.includes('driving') || i.includes('chauffeur') || i.includes('car drop') || i.includes('pickup')) return 'Driver';
+      // Cook / Chef
+      if (i.includes('cook') || i.includes('chef') || i.includes('khana') || i.includes('food prep') || i.includes('catering') || i.includes('bawarchee')) return 'Cook / Chef';
+      // Plumber (default home repair)
+      if (i.includes('plumb') || i.includes('pipe') || i.includes('water') || i.includes('tap') || i.includes('drain') || i.includes('flush') || i.includes('leak') || i.includes('motor pump') || i.includes('naali') || i.includes('paani') || i.includes('nalka')) return 'Plumber';
+      // Appliance Repair
+      if (i.includes('fridge') || i.includes('refrigerator') || i.includes('washing machine') || i.includes('microwave') || i.includes('dishwasher') || i.includes('oven') || i.includes('geyser') || i.includes('water heater') || i.includes('appliance')) return 'Appliance Repair Technician';
+      // Generic default
+      return 'Home Repair Technician';
+    };
+
     const fallbackIntent: Intent = {
-      service: lowercaseInput.includes('electric') || lowercaseInput.includes('bijli') || lowercaseInput.includes('short') || lowercaseInput.includes('wire') || lowercaseInput.includes('fan') || lowercaseInput.includes('light') ? 'Electrician' : 'Plumber',
+      service: detectService(lowercaseInput),
       location: detectedLocation,
-      urgency: lowercaseInput.includes('urgent') || lowercaseInput.includes('emergency') || lowercaseInput.includes('short') ? 'HIGH' : 'NORMAL',
+      urgency: lowercaseInput.includes('urgent') || lowercaseInput.includes('emergency') || lowercaseInput.includes('jaldi') || lowercaseInput.includes('abhi') || lowercaseInput.includes('short') ? 'HIGH' : 'NORMAL',
       time: "ASAP",
-      language: lowercaseInput.includes('urdu') ? 'Urdu' : 'English'
+      language: lowercaseInput.includes('urdu') || lowercaseInput.includes('mujhe') || lowercaseInput.includes('chahiye') || lowercaseInput.includes('karo') ? 'Urdu' : 'English'
     };
 
     if (!ai) {
@@ -191,6 +228,17 @@ export class IntentAgent {
       const responseStream = await ai.models.generateContentStream({
         model: "gemini-1.5-flash",
         contents: `${historyContext}Extract service intent from this request: "${normalizedInput}"
+        
+        The service field MUST match the actual request. Supported service types include (but are not limited to):
+        Plumber, Electrician, Carpenter, AC Repair, Painter, House Cleaner, Pest Control, Mason, 
+        Welder, Gardner, Generator / UPS Technician, Appliance Repair Technician, Security System Installer,
+        Cook / Chef, Driver, Home Repair Technician.
+        
+        DO NOT default to "Plumber" unless the request is explicitly about plumbing/water/pipes.
+        Detect the correct service type from the user's message carefully.
+        
+        For location: extract the actual Pakistani city/neighborhood mentioned. If none is found, use a realistic Pakistani area.
+        
         Return JSON with: service, location, urgency (NORMAL/HIGH/CRITICAL), time, language.
         Include a "reasoning" field explaining why you chose these parameters.`,
         config: {
@@ -344,28 +392,56 @@ export class DiscoveryAgent {
       baseLng = userLocation.lng;
     }
 
+    // 2. Generate matches dynamically based on localized service and neighborhood inputs
+    const getDynamicFallbackProviders = (svc: string, loc: string) => {
+      const city = loc.split(',').pop()?.trim() || "Lahore";
+      const names = [
+        `Bismillah ${svc} & Maintenance`,
+        `Al-Rahman ${svc} Services`,
+        `Grace ${svc} Works`,
+        `Speedy ${svc} Repair Techs`,
+        `Expert ${svc} Crew`,
+        `Siddique & Sons ${svc} Hub`,
+        `Smart Fix ${svc} Solutions`,
+        `Super Power ${svc} Care`,
+        `Pak Precision ${svc} Node`,
+        `Khyber ${svc} Masters`,
+        `Decent ${svc} & Hardware`,
+        `Capital ${svc} Professionals`,
+        `Faisalabad ${svc} Specialists`,
+        `Reliable ${svc} Experts`,
+        `Shine ${svc} Solutions`,
+        `${city} Quick ${svc}ers`,
+        `Decent Repair Node`
+      ];
+
+      // Shuffle names dynamically
+      const shuffled = [...names].sort(() => 0.5 - Math.random());
+      
+      return [
+        {
+          name: shuffled[0],
+          address_detail: "Commercial Area Block A",
+          specialty: svc,
+          rating: parseFloat((4.3 + Math.random() * 0.7).toFixed(1)),
+          price_service: Math.floor(600 + Math.random() * 300),
+          price_parts: Math.floor(150 + Math.random() * 200)
+        },
+        {
+          name: shuffled[1],
+          address_detail: "Main Boulevard Road",
+          specialty: svc,
+          rating: parseFloat((4.0 + Math.random() * 0.9).toFixed(1)),
+          price_service: Math.floor(450 + Math.random() * 250),
+          price_parts: Math.floor(200 + Math.random() * 250)
+        }
+      ];
+    };
+
+    const fallbackProviders = getDynamicFallbackProviders(service, location);
+
     let resultProviders: any[] = [];
     let reasoning = "";
-
-    // 2. Filter matches strictly to "Smart Fix Solutions" and "Siddique & Sons" with randomized price/rating each time
-    const fallbackProviders = [
-      { 
-        name: "Smart Fix Solutions", 
-        address_detail: "Main Boulevard", 
-        specialty: service, 
-        rating: parseFloat((4.4 + Math.random() * 0.5).toFixed(1)), 
-        price_service: Math.floor(550 + Math.random() * 250), 
-        price_parts: Math.floor(100 + Math.random() * 150) 
-      },
-      { 
-        name: "Siddique & Sons", 
-        address_detail: "Link Avenue", 
-        specialty: service, 
-        rating: parseFloat((4.1 + Math.random() * 0.6).toFixed(1)), 
-        price_service: Math.floor(400 + Math.random() * 200), 
-        price_parts: Math.floor(200 + Math.random() * 200) 
-      }
-    ];
 
     if (!ai) {
       if (onChunk) {
@@ -381,9 +457,17 @@ export class DiscoveryAgent {
       try {
         const responseStream = await ai.models.generateContentStream({
           model: "gemini-1.5-flash",
-          contents: `Find 2 diverse ${service} providers in ${location}, Pakistan. Limit options to "Smart Fix Solutions" and "Siddique & Sons".
-          Return JSON list of providers with: name, address_detail, specialty, rating (4.0-5.0), price_service (PKR), price_parts (PKR).
-          Include a "reasoning" field explaining the provider selection criteria.`,
+          contents: `Find 2-3 realistic local Pakistani service providers for "${service}" near ${location}, Pakistan.
+          
+          The service type is "${service}" — find providers who specialize EXACTLY in this service.
+          For example: if service is "AC Repair", find AC technicians. If "Carpenter", find carpenters. If "Pest Control", find pest control companies.
+          DO NOT return generic or unrelated providers.
+          
+          Return realistic Pakistani business names appropriate for the "${service}" trade (e.g. Gulberg AC Experts, Clifton Pest Shield, Bahria Carpenter Studio).
+          Provider names should reflect the service type AND the neighborhood/city context.
+          
+          Return a JSON list of providers with: name, address_detail, specialty (must match "${service}"), rating (4.0-5.0), price_service (PKR 300-2000 based on service type), price_parts (PKR 50-1000).
+          Include a "reasoning" field explaining provider selection.`,
           config: {
             responseMimeType: "application/json",
             responseSchema: {
@@ -423,25 +507,14 @@ export class DiscoveryAgent {
         const result = parseJSONSafely(fullText || "{}", { providers: fallbackProviders, reasoning: "Fallback to default providers" });
         const rawProviders = result.providers || fallbackProviders;
         
-        // Map explicitly to enforce Smart Fix Solutions and Siddique & Sons
-        resultProviders = [
-          {
-            name: "Smart Fix Solutions",
-            address_detail: rawProviders[0]?.address_detail || "Main Boulevard",
-            specialty: rawProviders[0]?.specialty || service,
-            rating: rawProviders[0]?.rating || parseFloat((4.4 + Math.random() * 0.5).toFixed(1)),
-            price_service: rawProviders[0]?.price_service || Math.floor(550 + Math.random() * 250),
-            price_parts: rawProviders[0]?.price_parts || Math.floor(100 + Math.random() * 150)
-          },
-          {
-            name: "Siddique & Sons",
-            address_detail: rawProviders[1]?.address_detail || "Link Avenue",
-            specialty: rawProviders[1]?.specialty || service,
-            rating: rawProviders[1]?.rating || parseFloat((4.1 + Math.random() * 0.6).toFixed(1)),
-            price_service: rawProviders[1]?.price_service || Math.floor(400 + Math.random() * 200),
-            price_parts: rawProviders[1]?.price_parts || Math.floor(200 + Math.random() * 200)
-          }
-        ];
+        resultProviders = rawProviders.map((rawP: any) => ({
+          name: rawP.name || "Local Repair Expert",
+          address_detail: rawP.address_detail || "Main Commercial Market",
+          specialty: rawP.specialty || service,
+          rating: rawP.rating || parseFloat((4.2 + Math.random() * 0.7).toFixed(1)),
+          price_service: rawP.price_service || Math.floor(500 + Math.random() * 300),
+          price_parts: rawP.price_parts || Math.floor(100 + Math.random() * 200)
+        }));
         reasoning = result.reasoning || "Reasoning missing";
       } catch (e: any) {
         console.error("DiscoveryAgent error:", e);

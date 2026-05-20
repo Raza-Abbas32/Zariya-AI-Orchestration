@@ -23,7 +23,14 @@ import {
   X,
   Clock,
   Phone,
-  Sparkles
+  Sparkles,
+  Menu,
+  Network,
+  Receipt,
+  Sliders,
+  Shield,
+  BarChart3,
+  HeartPulse
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -41,6 +48,7 @@ import TrustMatrixPanel from './features/analytics/TrustMatrixPanel';
 import ParametersPanel from './features/dashboard/ParametersPanel';
 import SystemHealthPanel from './features/analytics/SystemHealthPanel';
 import TransactionsPanel from './features/transactions/TransactionsPanel';
+import * as Logger from './lib/logger';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -149,6 +157,8 @@ export default function App() {
 
   const orchestrator = useRef<ZariyaOrchestrator | null>(null);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const [speechText, setSpeechText] = useState('');
   const [input, setInput] = useState('');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [contactInput, setContactInput] = useState('');
@@ -194,6 +204,19 @@ export default function App() {
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<UserData[]>([]);
 
+  // Mobile Menu Navigation Drawer State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Admin User Provisioning Form State
+  const [provName, setProvName] = useState('');
+  const [provEmail, setProvEmail] = useState('');
+  const [provPassword, setProvPassword] = useState('');
+  const [provRole, setProvRole] = useState<'customer' | 'provider' | 'admin'>('customer');
+  const [provSpecialty, setProvSpecialty] = useState('Plumber');
+  const [provError, setProvError] = useState('');
+  const [provSuccess, setProvSuccess] = useState('');
+  const [isProvisioning, setIsProvisioning] = useState(false);
+
   const apiPrefix = import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes('your-backend-url')
     ? import.meta.env.VITE_API_URL
     : (import.meta.env.PROD ? window.location.origin + '/api' : 'http://localhost:3001/api');
@@ -215,12 +238,28 @@ export default function App() {
       }
 
       if (user?.role === 'admin') {
-        // Load mock users list or fetch from database
-        setRegisteredUsers([
-          { id: "usr_cust_1", email: "customer@zariya.pk", name: "Ayesha Khan", role: "customer" },
-          { id: "usr_prov_1", email: "provider@zariya.pk", name: "Muhammad Ali", role: "provider", specialty: "Plumber" },
-          { id: "usr_adm_1", email: "admin@zariya.pk", name: "Zariya Admin", role: "admin" }
-        ]);
+        try {
+          const usersRes = await fetch(`${apiPrefix}/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (usersRes.ok) {
+            const usersData = await usersRes.json();
+            setRegisteredUsers(usersData);
+          } else {
+            setRegisteredUsers([
+              { id: "usr_cust_1", email: "customer@zariya.pk", name: "Ayesha Khan", role: "customer" },
+              { id: "usr_prov_1", email: "provider@zariya.pk", name: "Muhammad Ali", role: "provider", specialty: "Plumber" },
+              { id: "usr_adm_1", email: "admin@zariya.pk", name: "Zariya Admin", role: "admin" }
+            ]);
+          }
+        } catch (usersErr) {
+          console.warn("Failed to dynamically fetch user directory:", usersErr);
+          setRegisteredUsers([
+            { id: "usr_cust_1", email: "customer@zariya.pk", name: "Ayesha Khan", role: "customer" },
+            { id: "usr_prov_1", email: "provider@zariya.pk", name: "Muhammad Ali", role: "provider", specialty: "Plumber" },
+            { id: "usr_adm_1", email: "admin@zariya.pk", name: "Zariya Admin", role: "admin" }
+          ]);
+        }
       }
     } catch (e) {
       console.warn("Failed to fetch dashboard bookings:", e);
@@ -291,14 +330,45 @@ export default function App() {
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
           const region = getRegionFromCoords(latitude, longitude);
-          setState(s => ({ ...s, userLocation: { lat: latitude, lng: longitude }, regionCode: region }));
-          console.log("User location acquired:", latitude, longitude, "Region:", region);
+          
+          let resolvedAddress = "";
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+              {
+                headers: {
+                  'User-Agent': 'ZariyaPortal/1.0 (mjan8066m@gmail.com)'
+                }
+              }
+            );
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.display_name) {
+                // Shorten address to first 3 elements for clean presentation
+                const parts = data.display_name.split(',');
+                resolvedAddress = parts.slice(0, 3).join(',').trim();
+              }
+            }
+          } catch (err) {
+            console.error("Nominatim reverse geocoding failed:", err);
+          }
+
+          setState(s => ({ 
+            ...s, 
+            userLocation: { 
+              lat: latitude, 
+              lng: longitude, 
+              address: resolvedAddress || s.userLocation?.address || "Model Town, Lahore"
+            }, 
+            regionCode: region 
+          }));
+          Logger.success('GeoLocation', `📍 Location acquired: ${resolvedAddress || 'Unknown'}`, { lat: latitude, lng: longitude, region });
         },
         (error) => {
-          console.error("Error fetching location:", error);
+          Logger.warn('GeoLocation', 'GPS access denied or unavailable', { code: error.code });
         }
       );
     }
@@ -338,6 +408,8 @@ export default function App() {
 
   const handleStart = () => {
     if (input.trim()) {
+      Logger.startTrace();
+      Logger.logUserAction('Service Request Submitted', { query: input.slice(0, 60) });
       orchestrator.current?.run(input);
     }
   };
@@ -368,7 +440,7 @@ export default function App() {
     }, 12);
   };
 
-  const toggleVoice = () => {
+  const toggleVoice = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       const warningLog: AgentLog = {
@@ -382,70 +454,130 @@ export default function App() {
       return;
     }
 
-    if (!isVoiceMode) {
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'ur-PK'; 
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        
-        recognition.onstart = () => {
-          setIsVoiceMode(true);
-          const voiceLog: AgentLog = {
-            id: Math.random().toString(36).substring(7),
-            timestamp: new Date(),
-            agent: 'System',
-            message: "Neural audio capture active. Capture language set to Urdu (ur-PK)...",
-            type: 'info'
-          };
-          setState(s => ({ ...s, logs: [...s.logs, voiceLog] }));
-        };
-        
-        recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setInput(transcript);
-          setIsVoiceMode(false);
-          
-          const successLog: AgentLog = {
-            id: Math.random().toString(36).substring(7),
-            timestamp: new Date(),
-            agent: 'System',
-            message: `Audio signal captured successfully: "${transcript}"`,
-            type: 'success'
-          };
-          setState(s => ({ ...s, logs: [...s.logs, successLog] }));
-          
-          orchestrator.current?.run(transcript);
-        };
+    if (isVoiceMode) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.warn("Speech stop warning:", e);
+        }
+      }
+      setIsVoiceMode(false);
+      setSpeechText('');
+      return;
+    }
 
-        recognition.onerror = (event: any) => {
-          console.error("Speech recognition error:", event.error);
-          setIsVoiceMode(false);
-          
-          const errorLog: AgentLog = {
-            id: Math.random().toString(36).substring(7),
-            timestamp: new Date(),
-            agent: 'System',
-            message: `Neural capture failed (${event.error}). Defaulting to logical keyboard input.`,
-            type: 'warning'
-          };
-          setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
+    setSpeechText('Requesting microphone permissions...');
+
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+      }
+    } catch (err: any) {
+      console.warn("Microphone permission denied:", err);
+      const errorLog: AgentLog = {
+        id: Math.random().toString(36).substring(7),
+        timestamp: new Date(),
+        agent: 'System',
+        message: `Microphone access denied: ${err.message || err}. Please enable mic permission in your browser settings.`,
+        type: 'warning'
+      };
+      setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
+      setIsVoiceMode(false);
+      setSpeechText('');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = 'ur-PK'; 
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      
+      let finalTranscriptText = '';
+
+      recognition.onstart = () => {
+        setIsVoiceMode(true);
+        setSpeechText('Listening... Speak now...');
+        const voiceLog: AgentLog = {
+          id: Math.random().toString(36).substring(7),
+          timestamp: new Date(),
+          agent: 'System',
+          message: "Neural audio capture active. Speak in Urdu or English...",
+          type: 'info'
         };
+        setState(s => ({ ...s, logs: [...s.logs, voiceLog] }));
+      };
+      
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
         
-        recognition.onend = () => setIsVoiceMode(false);
-        recognition.start();
-      } catch (e: any) {
-        console.error("Failed to start speech recognition:", e);
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscriptText += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        const currentText = finalTranscriptText || interimTranscript;
+        if (currentText) {
+          setInput(currentText);
+          setSpeechText(currentText);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
         setIsVoiceMode(false);
+        setSpeechText('');
+        
+        // Handle specific errors like quietness (no-speech)
+        const errorMsg = event.error === 'no-speech' 
+          ? "No speech detected. Fallback to logical keyboard input."
+          : `Neural capture warning: ${event.error}. Fallback to keyboard input.`;
+
         const errorLog: AgentLog = {
           id: Math.random().toString(36).substring(7),
           timestamp: new Date(),
           agent: 'System',
-          message: `Voice Initialization error: ${e.message}. Defaulting to logical keyboard input.`,
+          message: errorMsg,
           type: 'warning'
         };
         setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
-      }
+      };
+      
+      recognition.onend = () => {
+        setIsVoiceMode(false);
+        setSpeechText('');
+        if (finalTranscriptText.trim()) {
+          const successLog: AgentLog = {
+            id: Math.random().toString(36).substring(7),
+            timestamp: new Date(),
+            agent: 'System',
+            message: `Audio signal captured successfully: "${finalTranscriptText}"`,
+            type: 'success'
+          };
+          setState(s => ({ ...s, logs: [...s.logs, successLog] }));
+          orchestrator.current?.run(finalTranscriptText);
+        }
+      };
+      
+      recognition.start();
+    } catch (e: any) {
+      console.error("Failed to start speech recognition:", e);
+      setIsVoiceMode(false);
+      setSpeechText('');
+      const errorLog: AgentLog = {
+        id: Math.random().toString(36).substring(7),
+        timestamp: new Date(),
+        agent: 'System',
+        message: `Voice Initialization error: ${e.message}. Defaulting to logical keyboard input.`,
+        type: 'warning'
+      };
+      setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
     }
   };
 
@@ -522,6 +654,52 @@ export default function App() {
     setState(INITIAL_STATE);
   };
 
+  const handleAdminProvisionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProvError('');
+    setProvSuccess('');
+    if (!provName || !provEmail || !provPassword) {
+      setProvError('Please fill out all required fields.');
+      return;
+    }
+    setIsProvisioning(true);
+
+    try {
+      const body = {
+        email: provEmail,
+        password: provPassword,
+        name: provName,
+        role: provRole,
+        specialty: provRole === 'provider' ? provSpecialty : undefined
+      };
+
+      const response = await fetch(`${apiPrefix}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setProvError(data.error || 'Provisioning failed');
+        setIsProvisioning(false);
+        return;
+      }
+
+      setProvSuccess(`Account Node for ${provName} successfully provisioned!`);
+      setProvName('');
+      setProvEmail('');
+      setProvPassword('');
+      
+      // Auto-refresh the user list
+      fetchDashboardData();
+    } catch (err: any) {
+      setProvError('Connection failed: ' + err.message);
+    } finally {
+      setIsProvisioning(false);
+    }
+  };
+
   const updateBookingStatus = async (bookingId: string, newStatus: string) => {
     try {
       const response = await fetch(`${apiPrefix}/bookings/${bookingId}/status`, {
@@ -578,11 +756,17 @@ export default function App() {
             className="fixed inset-0 bg-slate-50/95 backdrop-blur-2xl z-[9999] flex items-center justify-center p-4 overflow-y-auto py-8"
           >
             <div className="bg-white/80 border border-slate-200/80 w-full max-w-md rounded-[32px] overflow-y-auto max-h-[90vh] shadow-2xl flex flex-col p-8 backdrop-blur-md">
-              <div className="flex items-center gap-3 mb-8 justify-center">
-                <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/20">
-                  <Zap className="w-6 h-6 text-white" />
+              <div className="flex flex-col items-center gap-2 mb-8">
+                <img 
+                  src="/zariya-logo.png" 
+                  alt="Zariya" 
+                  className="h-20 w-20 object-contain drop-shadow-lg"
+                  onError={(e) => { e.currentTarget.style.display='none'; }}
+                />
+                <div className="text-center">
+                  <span className="text-2xl font-black tracking-tighter text-[#5503A5]">ZARIYA</span>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-mono mt-0.5">Autonomous Home Services</p>
                 </div>
-                <span className="text-2xl font-black tracking-tighter text-slate-900">ZARIYA /</span>
               </div>
 
               {/* Toggles */}
@@ -688,10 +872,23 @@ export default function App() {
       {/* Mobile Header (Visible only on small screens) */}
       <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200/80 z-30 shadow-sm">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-            <Zap className="w-5 h-5 text-white" />
+          {user && (
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-650 hover:bg-slate-100 active:scale-95 transition-all"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+          <div className="flex items-center gap-2">
+            <img 
+              src="/zariya-logo.png" 
+              alt="Zariya" 
+              className="h-8 w-8 object-contain rounded-lg"
+              onError={(e) => { e.currentTarget.style.display='none'; }}
+            />
+            <span className="text-lg font-black tracking-tighter text-[#5503A5]">Zariya</span>
           </div>
-          <span className="text-lg font-black tracking-tighter text-slate-800">Zariya AI</span>
         </div>
         <div className="flex items-center gap-2">
           {user && (
@@ -704,6 +901,53 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      {/* Mobile Sidebar Navigation Drawer Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-[9999] flex md:hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            {/* Drawer Content */}
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-80 max-w-[85vw] h-full bg-white shadow-2xl flex flex-col z-10"
+            >
+              <div className="absolute top-4 right-4 z-20">
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                <Sidebar 
+                  activeTab={activeTab} 
+                  setActiveTab={(tab) => {
+                    setActiveTab(tab);
+                    setIsMobileMenuOpen(false);
+                  }} 
+                  user={user} 
+                  onLogout={() => {
+                    handleLogout();
+                    setIsMobileMenuOpen(false);
+                  }} 
+                />
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* 2. Responsive Sidebar (Hidden on mobile) */}
       <div className="hidden md:flex">
@@ -731,17 +975,25 @@ export default function App() {
               
               <div className="flex w-full md:w-auto bg-white border border-slate-200/80 p-1 rounded-2xl shadow-sm">
                 <button 
-                  onClick={() => setIsVoiceMode(false)}
+                  onClick={() => {
+                    if (recognitionRef.current) {
+                      try {
+                        recognitionRef.current.stop();
+                      } catch (e) {}
+                    }
+                    setIsVoiceMode(false);
+                    setSpeechText('');
+                  }}
                   className={cn("flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] md:text-xs font-bold transition-all", !isVoiceMode ? "bg-accent text-white shadow-md shadow-accent/20" : "text-text-secondary hover:text-accent")}
                 >
                   Logical Input
                 </button>
                 <button 
                   onClick={toggleVoice}
-                  className={cn("flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] md:text-xs font-bold transition-all flex items-center justify-center gap-2", isVoiceMode ? "bg-accent text-white shadow-md shadow-accent/20" : "text-text-secondary hover:text-accent")}
+                  className={cn("flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] md:text-xs font-bold transition-all flex items-center justify-center gap-2", isVoiceMode ? "bg-red-500 text-white shadow-md shadow-red-500/20 hover:bg-red-600" : "text-text-secondary hover:text-accent")}
                 >
-                  <Mic className="w-3 h-3" />
-                  Neural Voice
+                  <Mic className="w-3 h-3 animate-pulse" />
+                  {isVoiceMode ? "Stop Capture" : "Neural Voice"}
                 </button>
               </div>
             </header>
@@ -764,7 +1016,16 @@ export default function App() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-accent/95 backdrop-blur-md rounded-xl md:rounded-2xl flex items-center justify-center gap-4 md:gap-6 text-white text-center"
+                            className="absolute inset-0 bg-accent/95 backdrop-blur-md rounded-xl md:rounded-2xl flex flex-col items-center justify-center gap-3 md:gap-4 text-white text-center p-4 cursor-pointer"
+                            onClick={() => {
+                              if (recognitionRef.current) {
+                                try {
+                                  recognitionRef.current.stop();
+                                } catch (e) {}
+                              }
+                              setIsVoiceMode(false);
+                              setSpeechText('');
+                            }}
                           >
                             <div className="flex gap-1 items-end h-6 md:h-8">
                               {[1, 2, 3, 4, 5].map((i) => (
@@ -776,11 +1037,38 @@ export default function App() {
                                 />
                               ))}
                             </div>
-                            <span className="font-black text-xs md:text-sm uppercase tracking-widest md:tracking-[0.2em]">Neural Signal Capture...</span>
+                            <span className="font-black text-xs md:text-sm uppercase tracking-widest md:tracking-[0.2em] text-white/90">Neural Signal Capture...</span>
+                            <div className="max-w-md bg-white/10 px-6 py-3 rounded-2xl border border-white/10 shadow-inner mt-1">
+                              <p className="text-sm md:text-base font-extrabold text-white">
+                                "{speechText || 'Listening... speak now'}"
+                              </p>
+                            </div>
+                            <span className="text-[9px] text-white/50 uppercase font-bold tracking-widest animate-pulse mt-1">Click anywhere or button to Stop/Cancel</span>
                           </motion.div>
                         )}
                       </AnimatePresence>
                     </div>
+
+                    {state.userLocation?.address && (
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest mr-2">📍 Live GPS Address Node:</span>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const landmark = state.userLocation?.address || "";
+                            setInput(prev => {
+                              const base = prev.trim();
+                              if (!base) return `I need service near ${landmark}`;
+                              if (base.toLowerCase().includes(landmark.toLowerCase())) return prev;
+                              return `${base} near ${landmark}`;
+                            });
+                          }}
+                          className="text-[10px] font-bold bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 shadow-sm shadow-accent/5 cursor-pointer hover:scale-[1.02] active:scale-95"
+                        >
+                          <span className="animate-pulse">📍</span> Use My Live Location: <span className="underline font-extrabold">{state.userLocation.address}</span>
+                        </button>
+                      </div>
+                    )}
 
                     {/* Quick Category Selection (Module 2) */}
                     <div className="flex flex-wrap gap-2 items-center">
@@ -1323,8 +1611,7 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* ================== ADMIN: USER DIRECTORY TAB ================== */}
+             {/* ================== ADMIN: USER DIRECTORY TAB ================== */}
         {activeTab === 'admin-users' && user?.role === 'admin' && (
           <div className="flex-1 p-4 md:p-8 bg-bg-dark flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
             <header className="border-b border-slate-200/40 pb-4">
@@ -1334,39 +1621,123 @@ export default function App() {
               <p className="text-text-secondary text-sm font-medium uppercase tracking-widest text-[9px] mt-1">Platform Account Node Index</p>
             </header>
 
-            <div className="space-y-4">
-              <h2 className="text-[10px] font-black uppercase text-slate-800 tracking-widest">Registered User Nodes</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {registeredUsers.map((u) => (
-                  <div key={u.id} className="bg-white border border-slate-200/80 p-5 rounded-2xl flex items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-slate-100 border border-slate-200/60 rounded-2xl flex items-center justify-center font-black text-lg text-accent">
-                        {u.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-slate-800 text-base leading-tight">{u.name}</h4>
-                        <p className="text-xs text-text-secondary mt-1">{u.email}</p>
-                        <p className="text-[9px] font-mono text-slate-500 mt-1 uppercase font-bold">ID: {u.id}</p>
-                      </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Provision Form */}
+              <div className="lg:col-span-1">
+                <div className="bg-white/80 border border-slate-200/80 rounded-[28px] p-6 shadow-xl backdrop-blur-md sticky top-6">
+                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4">Provision New Account Node</h2>
+                  <form onSubmit={handleAdminProvisionSubmit} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Full Name</label>
+                      <input 
+                        type="text"
+                        value={provName}
+                        onChange={(e) => setProvName(e.target.value)}
+                        placeholder="e.g. Raza Abbas"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
+                      />
                     </div>
 
-                    <div className="text-right">
-                      <span className={cn(
-                        "text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border",
-                        u.role === 'customer' ? "bg-blue-500/10 text-blue-650 border-blue-200/50" :
-                        u.role === 'provider' ? "bg-accent/10 text-accent border-accent/20" : "bg-purple-500/10 text-purple-600 border-purple-200/50"
-                      )}>
-                        {u.role}
-                      </span>
-                      {u.specialty && (
-                        <p className="text-[9px] text-text-secondary mt-2 font-bold uppercase tracking-tighter bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-lg inline-block">
-                          {u.specialty}
-                        </p>
-                      )}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Email Address</label>
+                      <input 
+                        type="email"
+                        value={provEmail}
+                        onChange={(e) => setProvEmail(e.target.value)}
+                        placeholder="e.g. raza@zariya.pk"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
+                      />
                     </div>
-                  </div>
-                ))}
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Password</label>
+                      <input 
+                        type="password"
+                        value={provPassword}
+                        onChange={(e) => setProvPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Account Role</label>
+                      <select 
+                        value={provRole}
+                        onChange={(e) => setProvRole(e.target.value as any)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                      >
+                        <option value="customer">Customer (Find Services)</option>
+                        <option value="provider">Provider (Fulfill Services)</option>
+                        <option value="admin">Admin (Manage Platform)</option>
+                      </select>
+                    </div>
+
+                    {provRole === 'provider' && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Specialty Focus</label>
+                        <select 
+                          value={provSpecialty}
+                          onChange={(e) => setProvSpecialty(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                        >
+                          <option value="Plumber">Plumbing Expert</option>
+                          <option value="Electrician">Electrical Specialist</option>
+                          <option value="Carpenter">Carpentry Node</option>
+                          <option value="AC Repair">AC Climate Systems</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {provError && <p className="text-red-500 text-xs font-bold pl-2 pt-1">{provError}</p>}
+                    {provSuccess && <p className="text-emerald-650 text-xs font-bold pl-2 pt-1">{provSuccess}</p>}
+
+                    <button 
+                      type="submit"
+                      disabled={isProvisioning}
+                      className="w-full bg-accent text-white font-bold text-xs tracking-widest py-3 rounded-xl hover:scale-[1.02] active:scale-95 transition-all shadow-md shadow-accent/25 mt-4 cursor-pointer disabled:opacity-50"
+                    >
+                      {isProvisioning ? 'PROVISIONING...' : 'PROVISION ACCOUNT NODE'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Registered Users List */}
+              <div className="lg:col-span-2 space-y-4">
+                <h2 className="text-[10px] font-black uppercase text-slate-800 tracking-widest">Registered User Nodes</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+                  {registeredUsers.map((u) => (
+                    <div key={u.id} className="bg-white border border-slate-200/80 p-5 rounded-2xl flex items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-slate-100 border border-slate-200/60 rounded-2xl flex items-center justify-center font-black text-lg text-accent">
+                          {u.name ? u.name.charAt(0) : 'U'}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-base leading-tight">{u.name}</h4>
+                          <p className="text-xs text-text-secondary mt-1">{u.email}</p>
+                          <p className="text-[9px] font-mono text-slate-500 mt-1 uppercase font-bold">ID: {u.id}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className={cn(
+                          "text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border",
+                          u.role === 'customer' ? "bg-blue-500/10 text-blue-650 border-blue-200/50" :
+                          u.role === 'provider' ? "bg-accent/10 text-accent border-accent/20" : "bg-purple-500/10 text-purple-650 border-purple-200/50"
+                        )}>
+                          {u.role}
+                        </span>
+                        {u.specialty && (
+                          <p className="text-[9px] text-text-secondary mt-2 font-bold uppercase tracking-tighter bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-lg inline-block">
+                            {u.specialty}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

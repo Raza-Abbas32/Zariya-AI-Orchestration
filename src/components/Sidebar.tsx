@@ -62,7 +62,14 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
     <aside className="w-64 bg-white border-r border-slate-200/80 flex flex-col justify-between h-screen sticky top-0 text-slate-900 z-20 shadow-sm">
       {/* Brand Logo */}
       <div className="p-5 flex items-center gap-3 border-b border-slate-100 bg-white">
-        <img src="/assets/zariya_logo.png" className="h-10 object-contain" alt="Zariya Logo" />
+        <img 
+          src="/zariya-logo.png" 
+          className="h-10 w-10 object-contain rounded-lg" 
+          alt="Zariya Logo"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
         <div>
           <h1 className="text-xl font-black tracking-tight text-[#5503A5] font-sans">
             ZARIYA
