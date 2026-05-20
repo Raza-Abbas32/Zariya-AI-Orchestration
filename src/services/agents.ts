@@ -93,17 +93,84 @@ export class CommunicationAgent {
 export class IntentAgent {
   async extract(normalizedInput: string, history?: ChatMessage[], onChunk?: (chunk: string) => void): Promise<AgentResponse<Intent>> {
     const ai = getGemini();
+    
+    // Dynamic Fallback Location list to ensure different results each time if no specific location is provided
+    const randomLocations = [
+      "Gulberg, Lahore",
+      "DHA Phase 5, Karachi",
+      "F-7 Sector, Islamabad",
+      "Johar Town, Lahore",
+      "Clifton, Karachi",
+      "DHA Phase 6, Lahore",
+      "G-11 Sector, Islamabad",
+      "Faisal Town, Lahore",
+      "Gulshan-e-Iqbal, Karachi",
+      "Saddar, Rawalpindi"
+    ];
+
+    const lowercaseInput = normalizedInput.toLowerCase();
+    let detectedLocation = "";
+
+    const cities = ["lahore", "karachi", "islamabad", "rawalpindi", "faisalabad", "peshawar", "multan", "quetta", "sialkot", "gujranwala", "hyderabad"];
+    const neighborhoods = ["gulberg", "model town", "dha", "johar town", "samanabad", "faisal town", "wapda town", "iqbal town", "cavalry", "garden town", "clifton", "gulshan", "saddar", "f-7", "f-8", "f-6", "g-11", "i-8", "blue area", "bahria"];
+    
+    let foundCity = "";
+    let foundNeighborhood = "";
+    
+    for (const city of cities) {
+      if (lowercaseInput.includes(city)) {
+        foundCity = city.charAt(0).toUpperCase() + city.slice(1);
+        break;
+      }
+    }
+    
+    for (const nh of neighborhoods) {
+      if (lowercaseInput.includes(nh)) {
+        foundNeighborhood = nh.toUpperCase();
+        if (nh === "model town") foundNeighborhood = "Model Town";
+        else if (nh === "johar town") foundNeighborhood = "Johar Town";
+        else if (nh === "faisal town") foundNeighborhood = "Faisal Town";
+        else if (nh === "wapda town") foundNeighborhood = "Wapda Town";
+        else if (nh === "iqbal town") foundNeighborhood = "Iqbal Town";
+        else if (nh === "cavalry") foundNeighborhood = "Cavalry Ground";
+        else if (nh === "garden town") foundNeighborhood = "Garden Town";
+        else if (nh === "gulshan") foundNeighborhood = "Gulshan-e-Iqbal";
+        else if (nh === "blue area") foundNeighborhood = "Blue Area";
+        else if (nh === "bahria") foundNeighborhood = "Bahria Town";
+        break;
+      }
+    }
+    
+    if (foundNeighborhood && foundCity) {
+      detectedLocation = `${foundNeighborhood}, ${foundCity}`;
+    } else if (foundNeighborhood) {
+      detectedLocation = `${foundNeighborhood}, Lahore`;
+    } else if (foundCity) {
+      const lhrNHs = ["Gulberg", "DHA Phase 6", "Johar Town", "Model Town", "Faisal Town"];
+      const khiNHs = ["Clifton", "DHA Phase 5", "Gulshan-e-Iqbal", "Saddar", "North Nazimabad"];
+      const isbNHs = ["F-7 Sector", "F-8 Sector", "G-11 Sector", "I-8 Sector", "Blue Area"];
+      
+      let nhList = lhrNHs;
+      if (foundCity === "Karachi") nhList = khiNHs;
+      else if (foundCity === "Islamabad") nhList = isbNHs;
+      
+      const randomNH = nhList[Math.floor(Math.random() * nhList.length)];
+      detectedLocation = `${randomNH}, ${foundCity}`;
+    } else {
+      detectedLocation = randomLocations[Math.floor(Math.random() * randomLocations.length)];
+    }
+
     const fallbackIntent: Intent = {
-      service: normalizedInput.toLowerCase().includes('electric') || normalizedInput.toLowerCase().includes('bijli') ? 'Electrician' : 'Plumber',
-      location: "Model Town, Lahore",
-      urgency: "NORMAL",
+      service: lowercaseInput.includes('electric') || lowercaseInput.includes('bijli') || lowercaseInput.includes('short') || lowercaseInput.includes('wire') || lowercaseInput.includes('fan') || lowercaseInput.includes('light') ? 'Electrician' : 'Plumber',
+      location: detectedLocation,
+      urgency: lowercaseInput.includes('urgent') || lowercaseInput.includes('emergency') || lowercaseInput.includes('short') ? 'HIGH' : 'NORMAL',
       time: "ASAP",
-      language: "English"
+      language: lowercaseInput.includes('urdu') ? 'Urdu' : 'English'
     };
 
     if (!ai) {
       if (onChunk) {
-        const simReasoning = "Simulation: Extracting job specialty, city parameters, and service urgency factors...";
+        const simReasoning = `Simulation: Extracting job specialty (${fallbackIntent.service}), city parameters (${fallbackIntent.location}), and service urgency factors (${fallbackIntent.urgency})...`;
         for (let i = 0; i < simReasoning.length; i += 4) {
           onChunk(simReasoning.substring(i, i + 4));
           await new Promise(r => setTimeout(r, 15));
@@ -111,7 +178,7 @@ export class IntentAgent {
       }
       return {
         data: fallbackIntent,
-        reasoning: "Simulation: Extracted basic intent using keyword matching."
+        reasoning: `Simulation: Dynamic matching rules evaluated user input and successfully resolved mission parameters for ${fallbackIntent.service} in ${fallbackIntent.location}.`
       };
     }
     
@@ -235,33 +302,86 @@ export class PlanningAgent {
 export class DiscoveryAgent {
   async search(location: string, service: string, userLocation: { lat: number; lng: number } | null, onChunk?: (chunk: string) => void): Promise<AgentResponse<Provider[]>> {
     const ai = getGemini();
-    const baseLat = userLocation?.lat || 31.4805;
-    const baseLng = userLocation?.lng || 74.3213;
+    
+    // 1. Resolve coordinates dynamically based on the resolved neighborhood and city inputs
+    let baseLat = 31.4805;
+    let baseLng = 74.3213;
+    const locLower = location.toLowerCase();
+
+    // Map of highly accurate, authentic Pakistani coordinates for maps centering
+    if (locLower.includes("gulberg")) {
+      baseLat = 31.5204; baseLng = 74.3587;
+    } else if (locLower.includes("dha") && locLower.includes("karachi")) {
+      baseLat = 24.8210; baseLng = 67.0583;
+    } else if (locLower.includes("dha") && locLower.includes("islamabad")) {
+      baseLat = 33.5225; baseLng = 73.1610;
+    } else if (locLower.includes("dha")) {
+      baseLat = 31.4697; baseLng = 74.4534;
+    } else if (locLower.includes("johar town")) {
+      baseLat = 31.4697; baseLng = 74.2728;
+    } else if (locLower.includes("clifton")) {
+      baseLat = 24.8138; baseLng = 67.0333;
+    } else if (locLower.includes("gulshan")) {
+      baseLat = 24.9180; baseLng = 67.0970;
+    } else if (locLower.includes("f-7") || locLower.includes("f7")) {
+      baseLat = 33.7297; baseLng = 73.0548;
+    } else if (locLower.includes("f-8") || locLower.includes("f8")) {
+      baseLat = 33.7120; baseLng = 73.0425;
+    } else if (locLower.includes("g-11") || locLower.includes("g11")) {
+      baseLat = 33.6700; baseLng = 72.9900;
+    } else if (locLower.includes("blue area")) {
+      baseLat = 33.7118; baseLng = 73.0683;
+    } else if (locLower.includes("karachi")) {
+      baseLat = 24.8607; baseLng = 67.0011;
+    } else if (locLower.includes("islamabad")) {
+      baseLat = 33.6844; baseLng = 73.0479;
+    } else if (locLower.includes("rawalpindi")) {
+      baseLat = 33.5651; baseLng = 73.0169;
+    } else if (locLower.includes("peshawar")) {
+      baseLat = 34.0150; baseLng = 71.5250;
+    } else if (userLocation) {
+      baseLat = userLocation.lat;
+      baseLng = userLocation.lng;
+    }
 
     let resultProviders: any[] = [];
     let reasoning = "";
 
+    // 2. Filter matches strictly to "Smart Fix Solutions" and "Siddique & Sons" with randomized price/rating each time
     const fallbackProviders = [
-      { name: "Al-Hafiz Services", address_detail: "Sector C", specialty: service, rating: 4.8, price_service: 500, price_parts: 200 },
-      { name: "Smart Fix Solutions", address_detail: "Main Road", specialty: service, rating: 4.5, price_service: 700, price_parts: 100 },
-      { name: "Siddique & Sons", address_detail: "Link Road", specialty: service, rating: 4.2, price_service: 400, price_parts: 300 }
+      { 
+        name: "Smart Fix Solutions", 
+        address_detail: "Main Boulevard", 
+        specialty: service, 
+        rating: parseFloat((4.4 + Math.random() * 0.5).toFixed(1)), 
+        price_service: Math.floor(550 + Math.random() * 250), 
+        price_parts: Math.floor(100 + Math.random() * 150) 
+      },
+      { 
+        name: "Siddique & Sons", 
+        address_detail: "Link Avenue", 
+        specialty: service, 
+        rating: parseFloat((4.1 + Math.random() * 0.6).toFixed(1)), 
+        price_service: Math.floor(400 + Math.random() * 200), 
+        price_parts: Math.floor(200 + Math.random() * 200) 
+      }
     ];
 
     if (!ai) {
       if (onChunk) {
-        const simReasoning = "Simulation: Querying geographical spatial indices to pinpoint verified service providers...";
+        const simReasoning = `Simulation: Querying geographical spatial indices around base coordinates [${baseLat.toFixed(4)}, ${baseLng.toFixed(4)}] to pinpoint verified autonomous service providers...`;
         for (let i = 0; i < simReasoning.length; i += 4) {
           onChunk(simReasoning.substring(i, i + 4));
           await new Promise(r => setTimeout(r, 15));
         }
       }
       resultProviders = fallbackProviders;
-      reasoning = "Simulation: Using predefined regional provider database.";
+      reasoning = `Simulation: Dynamically mapped coordinates to [${baseLat.toFixed(4)}, ${baseLng.toFixed(4)}] and resolved matches for autonomous providers in ${location}.`;
     } else {
       try {
         const responseStream = await ai.models.generateContentStream({
           model: "gemini-1.5-flash",
-          contents: `Find 3 diverse ${service} providers in ${location}, Pakistan.
+          contents: `Find 2 diverse ${service} providers in ${location}, Pakistan. Limit options to "Smart Fix Solutions" and "Siddique & Sons".
           Return JSON list of providers with: name, address_detail, specialty, rating (4.0-5.0), price_service (PKR), price_parts (PKR).
           Include a "reasoning" field explaining the provider selection criteria.`,
           config: {
@@ -301,7 +421,27 @@ export class DiscoveryAgent {
         }
 
         const result = parseJSONSafely(fullText || "{}", { providers: fallbackProviders, reasoning: "Fallback to default providers" });
-        resultProviders = result.providers || fallbackProviders;
+        const rawProviders = result.providers || fallbackProviders;
+        
+        // Map explicitly to enforce Smart Fix Solutions and Siddique & Sons
+        resultProviders = [
+          {
+            name: "Smart Fix Solutions",
+            address_detail: rawProviders[0]?.address_detail || "Main Boulevard",
+            specialty: rawProviders[0]?.specialty || service,
+            rating: rawProviders[0]?.rating || parseFloat((4.4 + Math.random() * 0.5).toFixed(1)),
+            price_service: rawProviders[0]?.price_service || Math.floor(550 + Math.random() * 250),
+            price_parts: rawProviders[0]?.price_parts || Math.floor(100 + Math.random() * 150)
+          },
+          {
+            name: "Siddique & Sons",
+            address_detail: rawProviders[1]?.address_detail || "Link Avenue",
+            specialty: rawProviders[1]?.specialty || service,
+            rating: rawProviders[1]?.rating || parseFloat((4.1 + Math.random() * 0.6).toFixed(1)),
+            price_service: rawProviders[1]?.price_service || Math.floor(400 + Math.random() * 200),
+            price_parts: rawProviders[1]?.price_parts || Math.floor(200 + Math.random() * 200)
+          }
+        ];
         reasoning = result.reasoning || "Reasoning missing";
       } catch (e: any) {
         console.error("DiscoveryAgent error:", e);
@@ -310,29 +450,37 @@ export class DiscoveryAgent {
       }
     }
 
-    const providers = resultProviders.map((p: any, i: number) => ({
-      id: `P${i + 1}`,
-      name: p.name,
-      location: { 
-        lat: baseLat + (Math.random() - 0.5) * 0.02, 
-        lng: baseLng + (Math.random() - 0.5) * 0.02, 
-        address: `${p.address_detail}, ${location}` 
-      },
-      trustScore: 0.8 + Math.random() * 0.15,
-      distance: `${(0.5 + Math.random() * 5).toFixed(1)}km`,
-      availability: Math.random() > 0.3 ? "Immediate" : "Within 1 hour",
-      eta: `${Math.floor(15 + Math.random() * 25)} mins`,
-      rating: p.rating,
-      avatar: "",
-      pricing: { serviceFee: p.price_service, partsEst: p.price_parts, total: p.price_service + p.price_parts },
-      metrics: { 
-        reliability: `${Math.floor(85 + Math.random() * 15)}%`, 
-        consistency: `${Math.floor(80 + Math.random() * 20)}%`,
-        cancellationHistory: `${Math.floor(Math.random() * 5)}%`,
-        responseRate: `${Math.floor(90 + Math.random() * 10)}%`
-      },
-      specialty: p.specialty
-    }));
+    // 3. Dynamically offset coordinates around baseLat/baseLng and supply wide range of required metrics
+    const providers = resultProviders.map((p: any, i: number) => {
+      const reliabilityNum = Math.floor(88 + Math.random() * 11);
+      const consistencyNum = Math.floor(85 + Math.random() * 13);
+      const cancellationNum = Math.floor(Math.random() * 4);
+      const responseNum = Math.floor(92 + Math.random() * 8);
+
+      return {
+        id: `P${i + 1}`,
+        name: p.name,
+        location: { 
+          lat: baseLat + (Math.random() - 0.5) * 0.008, 
+          lng: baseLng + (Math.random() - 0.5) * 0.008, 
+          address: `${p.address_detail}, ${location}` 
+        },
+        trustScore: parseFloat((0.84 + Math.random() * 0.14).toFixed(2)),
+        distance: `${(0.4 + Math.random() * 3.5).toFixed(1)}km`,
+        availability: Math.random() > 0.45 ? "Immediate" : "Within 15 mins",
+        eta: `${Math.floor(10 + Math.random() * 20)} mins`,
+        rating: p.rating,
+        avatar: "",
+        pricing: { serviceFee: p.price_service, partsEst: p.price_parts, total: p.price_service + p.price_parts },
+        metrics: { 
+          reliability: `${reliabilityNum}%`, 
+          consistency: `${consistencyNum}%`,
+          cancellationHistory: `${cancellationNum}%`,
+          responseRate: `${responseNum}%`
+        },
+        specialty: p.specialty
+      };
+    });
 
     return { data: providers, reasoning };
   }

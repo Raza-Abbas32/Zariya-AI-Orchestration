@@ -57,7 +57,7 @@ export default function AiAnalyticsPanel({ history }: AiAnalyticsPanelProps) {
   ];
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-[calc(100vh-80px)] cyber-grid">
+    <div className="p-6 pb-28 md:pb-6 space-y-6 overflow-y-auto h-[calc(100vh-80px)] cyber-grid">
       
       {/* Upper Statistics row */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

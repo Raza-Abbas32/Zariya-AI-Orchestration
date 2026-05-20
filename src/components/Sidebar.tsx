@@ -103,33 +103,37 @@ export default function Sidebar({ activeTab, setActiveTab, user, onLogout }: Sid
           );
         })}
 
-        <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-3 mt-6 mb-2 font-mono">
-          Telemetry & Network
-        </div>
-        {developerItems.map((item) => {
-          const Icon = item.icon;
-          const isActive = activeTab === item.id;
-          return (
-            <button
-              key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 relative group cursor-pointer ${
-                isActive 
-                  ? 'bg-accent/10 border-l-[3px] border-accent text-accent glow-border-cyan' 
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 border-l-[3px] border-transparent'
-              }`}
-            >
-              <Icon className={`w-3.5 h-3.5 transition-transform duration-300 group-hover:scale-110 ${
-                isActive ? 'text-accent' : 'text-slate-400 group-hover:text-slate-700'
-              }`} />
-              <span>{item.label}</span>
-              
-              {!isActive && (
-                <div className="absolute right-3 w-1 h-1 rounded-full bg-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
-              )}
-            </button>
-          );
-        })}
+        {user?.role === 'admin' && (
+          <>
+            <div className="text-[9px] font-black text-slate-400 uppercase tracking-widest px-3 mt-6 mb-2 font-mono">
+              Telemetry & Network
+            </div>
+            {developerItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => setActiveTab(item.id)}
+                  className={`w-full flex items-center gap-3.5 px-3.5 py-2.5 rounded-xl text-xs font-semibold transition-all duration-300 relative group cursor-pointer ${
+                    isActive 
+                      ? 'bg-accent/10 border-l-[3px] border-accent text-accent glow-border-cyan' 
+                      : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50 border-l-[3px] border-transparent'
+                  }`}
+                >
+                  <Icon className={`w-3.5 h-3.5 transition-transform duration-300 group-hover:scale-110 ${
+                    isActive ? 'text-accent' : 'text-slate-400 group-hover:text-slate-700'
+                  }`} />
+                  <span>{item.label}</span>
+                  
+                  {!isActive && (
+                    <div className="absolute right-3 w-1 h-1 rounded-full bg-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                  )}
+                </button>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       {/* User Session Footer */}

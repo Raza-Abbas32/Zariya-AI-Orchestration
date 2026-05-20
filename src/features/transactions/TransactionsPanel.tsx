@@ -23,7 +23,7 @@ export default function TransactionsPanel({ history }: TransactionsPanelProps) {
   });
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-[calc(100vh-80px)] cyber-grid relative">
+    <div className="p-6 pb-28 md:pb-6 space-y-6 overflow-y-auto h-[calc(100vh-80px)] cyber-grid relative">
       
       {/* Title */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
@@ -148,7 +148,7 @@ export default function TransactionsPanel({ history }: TransactionsPanelProps) {
               <X className="w-4 h-4" />
             </button>
 
-            <div className="space-y-6">
+            <div className="space-y-6 overflow-y-auto flex-1 pr-1 pb-4">
               <div className="flex items-center gap-3 border-b border-slate-100 pb-4 mt-6">
                 <div className="p-3 bg-accent/10 rounded-2xl border border-accent/20 text-accent">
                   <ArrowUpRight className="w-6 h-6" />

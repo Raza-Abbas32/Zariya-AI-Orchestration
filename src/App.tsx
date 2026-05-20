@@ -575,9 +575,9 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-slate-50/95 backdrop-blur-2xl z-[9999] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-50/95 backdrop-blur-2xl z-[9999] flex items-center justify-center p-4 overflow-y-auto py-8"
           >
-            <div className="bg-white/80 border border-slate-200/80 w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl flex flex-col p-8 backdrop-blur-md">
+            <div className="bg-white/80 border border-slate-200/80 w-full max-w-md rounded-[32px] overflow-y-auto max-h-[90vh] shadow-2xl flex flex-col p-8 backdrop-blur-md">
               <div className="flex items-center gap-3 mb-8 justify-center">
                 <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/20">
                   <Zap className="w-6 h-6 text-white" />
@@ -747,7 +747,7 @@ export default function App() {
             </header>
 
             <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 flex-1 min-h-0">
-              <div className="lg:col-span-8 flex flex-col gap-6 order-1 lg:order-1">
+              <div className={cn("flex flex-col gap-6 order-1 lg:order-1", state.selectedProvider ? "lg:col-span-8" : "lg:col-span-12")}>
                 {/* Input Card */}
                 <section className="bg-white/80 border border-slate-200/80 rounded-[28px] p-4 md:p-6 shadow-xl relative overflow-hidden backdrop-blur-md">
                   <div className="flex flex-col gap-4">
@@ -828,7 +828,10 @@ export default function App() {
                 </section>
 
                 {/* Map Section */}
-                <section className="h-[300px] md:flex-1 bg-white/80 border border-slate-200/80 rounded-[28px] overflow-hidden shadow-xl relative flex flex-col backdrop-blur-md">
+                <section className={cn(
+                  "bg-white/80 border border-slate-200/80 rounded-[28px] overflow-hidden shadow-xl relative flex flex-col backdrop-blur-md md:flex-1",
+                  state.isAwaitingSelection ? "h-[500px]" : "h-[300px]"
+                )}>
                   <div className="absolute top-4 left-4 z-10 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-sm flex items-center gap-2">
                     <MapIcon className="w-3 h-3 text-accent" />
                     <span className="text-[10px] font-black tracking-widest uppercase text-slate-800">Spatial Grid</span>
@@ -966,33 +969,12 @@ export default function App() {
               </div>
 
               {/* Right Side: Agent Sequence + Telemetry + Trust Panel */}
-              <div className="lg:col-span-4 flex flex-col gap-6 order-2 lg:order-2">
-                
-                {/* Compact Agent Node Network Graph */}
-                <div className="h-44 bg-white/80 border border-slate-200/80 rounded-[28px] overflow-hidden relative shadow-xl backdrop-blur-md p-4">
-                  <div className="absolute top-3.5 left-4 z-10 flex items-center gap-1.5">
-                    <Cpu className="w-3.5 h-3.5 text-accent animate-pulse" />
-                    <span className="text-[9px] font-black uppercase text-slate-500 tracking-widest">Active Neural Nodes</span>
-                  </div>
-                  <AgentNodeGraph currentAgent={state.currentAgent} timeline={state.timeline} />
+              {state.selectedProvider && (
+                <div className="lg:col-span-4 flex flex-col gap-6 order-2 lg:order-2">
+                  {/* Trust Analysis Panel */}
+                  <TrustAnalysisPanel provider={state.selectedProvider} />
                 </div>
-
-                {/* Interactive Workflow Pipeline */}
-                <WorkflowPipeline 
-                  currentAgent={state.currentAgent} 
-                  timeline={state.timeline} 
-                  isProcessing={state.isProcessing} 
-                  logs={state.logs} 
-                />
-
-                {/* Stream Telemetry Logs */}
-                <div className="flex-1 bg-white/80 border border-slate-200/80 rounded-[28px] p-5 shadow-xl overflow-hidden flex flex-col min-h-[220px] backdrop-blur-md">
-                  <AntigravityStream logs={state.logs} isProcessing={state.isProcessing} timeline={state.timeline} />
-                </div>
-
-                {/* Trust Analysis Panel */}
-                <TrustAnalysisPanel provider={state.selectedProvider} />
-              </div>
+              )}
             </div>
           </div>
         )}
@@ -1391,8 +1373,8 @@ export default function App() {
         )}
 
         {/* Developer & System Views Tabs */}
-        {activeTab === 'agent-nodes' && (
-          <div className="flex-1 p-6 flex flex-col overflow-hidden h-[calc(100vh-80px)]">
+        {activeTab === 'agent-nodes' && user?.role === 'admin' && (
+          <div className="flex-1 p-4 md:p-6 flex flex-col overflow-hidden pb-28 md:pb-6">
             <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
               <div>
                 <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
@@ -1410,28 +1392,28 @@ export default function App() {
           </div>
         )}
 
-        {activeTab === 'transactions' && (
+        {activeTab === 'transactions' && user?.role === 'admin' && (
           <TransactionsPanel history={state.history} />
         )}
 
-        {activeTab === 'parameters' && (
+        {activeTab === 'parameters' && user?.role === 'admin' && (
           <ParametersPanel />
         )}
 
-        {activeTab === 'trust-matrix' && (
+        {activeTab === 'trust-matrix' && user?.role === 'admin' && (
           <TrustMatrixPanel providers={state.providers} />
         )}
 
-        {activeTab === 'ai-analytics' && (
+        {activeTab === 'ai-analytics' && user?.role === 'admin' && (
           <AiAnalyticsPanel history={state.history} />
         )}
 
-        {activeTab === 'system-health' && (
+        {activeTab === 'system-health' && user?.role === 'admin' && (
           <SystemHealthPanel />
         )}
 
-        {activeTab === 'live-streams' && (
-          <div className="p-6 flex flex-col h-[calc(100vh-80px)] overflow-hidden">
+        {activeTab === 'live-streams' && user?.role === 'admin' && (
+          <div className="flex-1 p-4 md:p-6 flex flex-col overflow-hidden pb-28 md:pb-6">
             <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
               <div>
                 <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
@@ -1637,12 +1619,12 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[3000] flex items-center justify-center p-6"
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[3000] flex items-center justify-center p-6 overflow-y-auto py-8"
              >
                 <motion.div 
                   initial={{ scale: 0.9, y: 20 }}
                   animate={{ scale: 1, y: 0 }}
-                  className="bg-white border border-slate-200/80 w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden flex flex-col"
+                  className="bg-white border border-slate-200/80 w-full max-w-md rounded-[32px] shadow-2xl overflow-y-auto max-h-[90vh] flex flex-col"
                 >
                   <div className="p-6 md:p-8 space-y-6">
                     <div className="flex items-center justify-between">

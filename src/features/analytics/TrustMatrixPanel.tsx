@@ -131,7 +131,7 @@ export default function TrustMatrixPanel({ providers }: TrustMatrixPanelProps) {
   const comparedProviders = activeProviders.filter(p => selectedIds.includes(p.id));
 
   return (
-    <div className="p-6 space-y-6 overflow-y-auto h-[calc(100vh-80px)] cyber-grid">
+    <div className="p-6 pb-28 md:pb-6 space-y-6 overflow-y-auto h-[calc(100vh-80px)] cyber-grid">
       
       {/* Title */}
       <div className="flex items-center justify-between border-b border-slate-100 pb-4">
