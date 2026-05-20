@@ -21,7 +21,7 @@ export default function MapView({ providers, targetLocation, selectedProvider }:
         attributionControl: false
       }).setView([30.3753, 69.3451], 5);
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(leafletMap.current);
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(leafletMap.current);
       layerGroup.current = L.layerGroup().addTo(leafletMap.current);
     }
 
@@ -70,7 +70,7 @@ export default function MapView({ providers, targetLocation, selectedProvider }:
       // Provider Marker
       const marker = L.circleMarker([p.location.lat, p.location.lng], {
         radius: isSelected ? 10 : 6,
-        fillColor: isSelected ? '#6d28d9' : (isShortest ? '#10b981' : '#94a3b8'),
+        fillColor: isSelected ? '#00f2ff' : (isShortest ? '#10b981' : '#94a3b8'),
         color: '#fff',
         weight: isSelected ? 3 : 1,
         opacity: 1,
@@ -85,7 +85,7 @@ export default function MapView({ providers, targetLocation, selectedProvider }:
           [targetLocation.lat, targetLocation.lng],
           [p.location.lat, p.location.lng]
         ], {
-          color: isSelected ? '#6d28d9' : (isShortest ? '#10b981' : '#cbd5e1'),
+          color: isSelected ? '#00f2ff' : (isShortest ? '#10b981' : '#cbd5e1'),
           weight: isSelected ? 4 : (isShortest ? 3 : 2),
           opacity: isSelected ? 0.8 : (isShortest ? 0.6 : 0.4),
           dashArray: (isSelected || isShortest) ? undefined : '5, 10'

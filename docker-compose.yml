@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  zariya-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: zariya_service
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - NODE_ENV=production
+      - JWT_SECRET=zariya_prod_secret_key_982347
+      - MONGODB_URI=mongodb://zariya-db:27017/zariya
+      - SMTP_HOST=smtp.ethereal.email
+      - SMTP_PORT=587
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+    depends_on:
+      - zariya-db
+    restart: unless-stopped
+
+  zariya-db:
+    image: mongo:6.0
+    container_name: zariya_database
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    restart: unless-stopped
+
+volumes:
+  mongodb_data:

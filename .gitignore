@@ -6,3 +6,9 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local databases and backups
+backups/
+bookings.json
+users.json
+sessions.json

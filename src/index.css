@@ -5,15 +5,18 @@
   --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-accent: #6d28d9;
-  --color-accent-glow: rgba(109, 40, 217, 0.2);
-  --color-bg-light: #ffffff;
-  --color-card-bg: rgba(255, 255, 255, 0.8);
+  --color-accent: #00f2ff;
+  --color-accent-glow: rgba(0, 242, 255, 0.2);
+  --color-bg-dark: #0a0b10;
+  --color-card-bg: rgba(20, 22, 32, 0.7);
+  --color-text-primary: #e0e0e0;
+  --color-text-secondary: #94a3b8;
+  --color-border: rgba(255, 255, 255, 0.1);
 }
 
 @layer base {
   body {
-    @apply bg-bg-light text-slate-900 antialiased;
+    @apply bg-bg-dark text-text-primary antialiased;
   }
 
   /* Custom Scrollbar */
@@ -24,7 +27,7 @@
     background: transparent;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-slate-200 rounded-full hover:bg-slate-300;
+    @apply bg-border rounded-full hover:bg-slate-800;
   }
 }
 
