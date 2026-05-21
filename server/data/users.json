@@ -1,0 +1,53 @@
+[
+  {
+    "id": "usr_cust_1",
+    "email": "customer@zariya.pk",
+    "password": "$2a$10$nH4Vbbp1Z6tr2CNx8eCq1OQvC2zPQPbm0SNriJ5kbFztaGGXfYx.2",
+    "name": "Ayesha Khan",
+    "role": "customer"
+  },
+  {
+    "id": "usr_prov_1",
+    "email": "provider@zariya.pk",
+    "password": "$2a$10$sOVPL83Hr/4ofbhk750lSOsVB/MoFRoQJ9s894ZeQZmbFsZojMOGS",
+    "name": "Muhammad Ali",
+    "role": "provider",
+    "specialty": "Plumber"
+  },
+  {
+    "id": "usr_adm_1",
+    "email": "admin@zariya.pk",
+    "password": "$2a$10$0sn4hc8BiK9pTFxph3QOMOAhxt0Ou3DzEfKfdgiEXvQrXEdGFbWiq",
+    "name": "Zariya Admin",
+    "role": "admin"
+  },
+  {
+    "id": "usr_4mrzeeyqs",
+    "email": "test_cust_1779256389166@zariya.pk",
+    "password": "$2a$10$YENDSt0lzKas8srpk/SEs.d0Z4Fl9Odl1Tret44/8yTRPbTe93R2.",
+    "name": "Test Customer",
+    "role": "customer"
+  },
+  {
+    "id": "usr_cbwrtomw5",
+    "email": "shahnazmemon50@gmail.com",
+    "password": "$2a$10$bxfwu6RB2hJN0uhoKkc3vu4Yuc7rtGd./CY2ojlcVHjJX9U/5w7bG",
+    "name": "Shahnaz",
+    "role": "customer"
+  },
+  {
+    "id": "usr_mub6uyyzr",
+    "email": "ghulamali98@gmail.com",
+    "password": "$2a$10$KhCIZskGaQ7JPlICMsvlruxVuHTWV/V3kr5f79ICA0ieozoFQufu.",
+    "name": "Ghulam Ali",
+    "role": "provider",
+    "specialty": "Carpenter"
+  },
+  {
+    "id": "usr_5m3k7959n",
+    "email": "shah@zariya.pk",
+    "password": "$2a$10$bxeCXBkhsEy1mHgyW7mCu.sIe1Txce6E4YFej8zcrxhL9bp.2nlEa",
+    "name": "Shahnaz",
+    "role": "customer"
+  }
+]
