@@ -23,15 +23,32 @@ import {
   X,
   Clock,
   Phone,
-  Sparkles
+  Sparkles,
+  Menu,
+  Network,
+  Receipt,
+  Sliders,
+  Shield,
+  BarChart3,
+  HeartPulse
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import MapView from './components/MapView';
-import TrustAnalysisPanel from './components/TrustAnalysisPanel';
+import TrustAnalysisPanel from './features/analytics/TrustAnalysisPanel';
 import { ZariyaOrchestrator } from './services/orchestrator';
 import { OrchestrationState, AgentLog, Provider } from './types';
+import Sidebar from './components/Sidebar';
+import AgentNodeGraph from './features/dashboard/AgentNodeGraph';
+import WorkflowPipeline from './features/dashboard/WorkflowPipeline';
+import AntigravityStream from './features/dashboard/AntigravityStream';
+import AiAnalyticsPanel from './features/analytics/AiAnalyticsPanel';
+import TrustMatrixPanel from './features/analytics/TrustMatrixPanel';
+import ParametersPanel from './features/dashboard/ParametersPanel';
+import SystemHealthPanel from './features/analytics/SystemHealthPanel';
+import TransactionsPanel from './features/transactions/TransactionsPanel';
+import * as Logger from './lib/logger';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -140,8 +157,10 @@ export default function App() {
 
   const orchestrator = useRef<ZariyaOrchestrator | null>(null);
   const [isVoiceMode, setIsVoiceMode] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const [speechText, setSpeechText] = useState('');
   const [input, setInput] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'provider-orders' | 'provider-earnings' | 'admin-bookings' | 'admin-users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [contactInput, setContactInput] = useState('');
   const [dateInput, setDateInput] = useState(() => {
     const today = new Date();
@@ -185,6 +204,19 @@ export default function App() {
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<UserData[]>([]);
 
+  // Mobile Menu Navigation Drawer State
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Admin User Provisioning Form State
+  const [provName, setProvName] = useState('');
+  const [provEmail, setProvEmail] = useState('');
+  const [provPassword, setProvPassword] = useState('');
+  const [provRole, setProvRole] = useState<'customer' | 'provider' | 'admin'>('customer');
+  const [provSpecialty, setProvSpecialty] = useState('Plumber');
+  const [provError, setProvError] = useState('');
+  const [provSuccess, setProvSuccess] = useState('');
+  const [isProvisioning, setIsProvisioning] = useState(false);
+
   const apiPrefix = import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes('your-backend-url')
     ? import.meta.env.VITE_API_URL
     : (import.meta.env.PROD ? window.location.origin + '/api' : 'http://localhost:3001/api');
@@ -206,12 +238,28 @@ export default function App() {
       }
 
       if (user?.role === 'admin') {
-        // Load mock users list or fetch from database
-        setRegisteredUsers([
-          { id: "usr_cust_1", email: "customer@zariya.pk", name: "Ayesha Khan", role: "customer" },
-          { id: "usr_prov_1", email: "provider@zariya.pk", name: "Muhammad Ali", role: "provider", specialty: "Plumber" },
-          { id: "usr_adm_1", email: "admin@zariya.pk", name: "Zariya Admin", role: "admin" }
-        ]);
+        try {
+          const usersRes = await fetch(`${apiPrefix}/users`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          if (usersRes.ok) {
+            const usersData = await usersRes.json();
+            setRegisteredUsers(usersData);
+          } else {
+            setRegisteredUsers([
+              { id: "usr_cust_1", email: "customer@zariya.pk", name: "Ayesha Khan", role: "customer" },
+              { id: "usr_prov_1", email: "provider@zariya.pk", name: "Muhammad Ali", role: "provider", specialty: "Plumber" },
+              { id: "usr_adm_1", email: "admin@zariya.pk", name: "Zariya Admin", role: "admin" }
+            ]);
+          }
+        } catch (usersErr) {
+          console.warn("Failed to dynamically fetch user directory:", usersErr);
+          setRegisteredUsers([
+            { id: "usr_cust_1", email: "customer@zariya.pk", name: "Ayesha Khan", role: "customer" },
+            { id: "usr_prov_1", email: "provider@zariya.pk", name: "Muhammad Ali", role: "provider", specialty: "Plumber" },
+            { id: "usr_adm_1", email: "admin@zariya.pk", name: "Zariya Admin", role: "admin" }
+          ]);
+        }
       }
     } catch (e) {
       console.warn("Failed to fetch dashboard bookings:", e);
@@ -282,14 +330,45 @@ export default function App() {
   useEffect(() => {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords;
           const region = getRegionFromCoords(latitude, longitude);
-          setState(s => ({ ...s, userLocation: { lat: latitude, lng: longitude }, regionCode: region }));
-          console.log("User location acquired:", latitude, longitude, "Region:", region);
+          
+          let resolvedAddress = "";
+          try {
+            const response = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+              {
+                headers: {
+                  'User-Agent': 'ZariyaPortal/1.0 (mjan8066m@gmail.com)'
+                }
+              }
+            );
+            if (response.ok) {
+              const data = await response.json();
+              if (data && data.display_name) {
+                // Shorten address to first 3 elements for clean presentation
+                const parts = data.display_name.split(',');
+                resolvedAddress = parts.slice(0, 3).join(',').trim();
+              }
+            }
+          } catch (err) {
+            console.error("Nominatim reverse geocoding failed:", err);
+          }
+
+          setState(s => ({ 
+            ...s, 
+            userLocation: { 
+              lat: latitude, 
+              lng: longitude, 
+              address: resolvedAddress || s.userLocation?.address || "Model Town, Lahore"
+            }, 
+            regionCode: region 
+          }));
+          Logger.success('GeoLocation', `📍 Location acquired: ${resolvedAddress || 'Unknown'}`, { lat: latitude, lng: longitude, region });
         },
         (error) => {
-          console.error("Error fetching location:", error);
+          Logger.warn('GeoLocation', 'GPS access denied or unavailable', { code: error.code });
         }
       );
     }
@@ -329,16 +408,39 @@ export default function App() {
 
   const handleStart = () => {
     if (input.trim()) {
+      Logger.startTrace();
+      Logger.logUserAction('Service Request Submitted', { query: input.slice(0, 60) });
       orchestrator.current?.run(input);
     }
   };
 
   const handleCategoryClick = (categoryText: string) => {
-    setInput(categoryText);
-    orchestrator.current?.run(categoryText);
+    handleSuggestionClick(categoryText);
   };
 
-  const toggleVoice = () => {
+  const handleSuggestionClick = (suggestionText: string) => {
+    if (state.isProcessing) return;
+    
+    setInput('');
+    let currentText = '';
+    let i = 0;
+    
+    setState(s => ({ ...s, isProcessing: true }));
+    
+    const timer = setInterval(() => {
+      if (i < suggestionText.length) {
+        currentText += suggestionText[i];
+        setInput(currentText);
+        i++;
+      } else {
+        clearInterval(timer);
+        setState(s => ({ ...s, isProcessing: false }));
+        orchestrator.current?.run(suggestionText);
+      }
+    }, 12);
+  };
+
+  const toggleVoice = async () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       const warningLog: AgentLog = {
@@ -352,70 +454,130 @@ export default function App() {
       return;
     }
 
-    if (!isVoiceMode) {
-      try {
-        const recognition = new SpeechRecognition();
-        recognition.lang = 'ur-PK'; 
-        recognition.continuous = false;
-        recognition.interimResults = false;
-        
-        recognition.onstart = () => {
-          setIsVoiceMode(true);
-          const voiceLog: AgentLog = {
-            id: Math.random().toString(36).substring(7),
-            timestamp: new Date(),
-            agent: 'System',
-            message: "Neural audio capture active. Capture language set to Urdu (ur-PK)...",
-            type: 'info'
-          };
-          setState(s => ({ ...s, logs: [...s.logs, voiceLog] }));
-        };
-        
-        recognition.onresult = (event: any) => {
-          const transcript = event.results[0][0].transcript;
-          setInput(transcript);
-          setIsVoiceMode(false);
-          
-          const successLog: AgentLog = {
-            id: Math.random().toString(36).substring(7),
-            timestamp: new Date(),
-            agent: 'System',
-            message: `Audio signal captured successfully: "${transcript}"`,
-            type: 'success'
-          };
-          setState(s => ({ ...s, logs: [...s.logs, successLog] }));
-          
-          orchestrator.current?.run(transcript);
-        };
+    if (isVoiceMode) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {
+          console.warn("Speech stop warning:", e);
+        }
+      }
+      setIsVoiceMode(false);
+      setSpeechText('');
+      return;
+    }
 
-        recognition.onerror = (event: any) => {
-          console.error("Speech recognition error:", event.error);
-          setIsVoiceMode(false);
-          
-          const errorLog: AgentLog = {
-            id: Math.random().toString(36).substring(7),
-            timestamp: new Date(),
-            agent: 'System',
-            message: `Neural capture failed (${event.error}). Defaulting to logical keyboard input.`,
-            type: 'warning'
-          };
-          setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
+    setSpeechText('Requesting microphone permissions...');
+
+    try {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(track => track.stop());
+      }
+    } catch (err: any) {
+      console.warn("Microphone permission denied:", err);
+      const errorLog: AgentLog = {
+        id: Math.random().toString(36).substring(7),
+        timestamp: new Date(),
+        agent: 'System',
+        message: `Microphone access denied: ${err.message || err}. Please enable mic permission in your browser settings.`,
+        type: 'warning'
+      };
+      setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
+      setIsVoiceMode(false);
+      setSpeechText('');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognitionRef.current = recognition;
+      recognition.lang = 'ur-PK'; 
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      
+      let finalTranscriptText = '';
+
+      recognition.onstart = () => {
+        setIsVoiceMode(true);
+        setSpeechText('Listening... Speak now...');
+        const voiceLog: AgentLog = {
+          id: Math.random().toString(36).substring(7),
+          timestamp: new Date(),
+          agent: 'System',
+          message: "Neural audio capture active. Speak in Urdu or English...",
+          type: 'info'
         };
+        setState(s => ({ ...s, logs: [...s.logs, voiceLog] }));
+      };
+      
+      recognition.onresult = (event: any) => {
+        let interimTranscript = '';
         
-        recognition.onend = () => setIsVoiceMode(false);
-        recognition.start();
-      } catch (e: any) {
-        console.error("Failed to start speech recognition:", e);
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          if (event.results[i].isFinal) {
+            finalTranscriptText += event.results[i][0].transcript;
+          } else {
+            interimTranscript += event.results[i][0].transcript;
+          }
+        }
+        
+        const currentText = finalTranscriptText || interimTranscript;
+        if (currentText) {
+          setInput(currentText);
+          setSpeechText(currentText);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error("Speech recognition error:", event.error);
         setIsVoiceMode(false);
+        setSpeechText('');
+        
+        // Handle specific errors like quietness (no-speech)
+        const errorMsg = event.error === 'no-speech' 
+          ? "No speech detected. Fallback to logical keyboard input."
+          : `Neural capture warning: ${event.error}. Fallback to keyboard input.`;
+
         const errorLog: AgentLog = {
           id: Math.random().toString(36).substring(7),
           timestamp: new Date(),
           agent: 'System',
-          message: `Voice Initialization error: ${e.message}. Defaulting to logical keyboard input.`,
+          message: errorMsg,
           type: 'warning'
         };
         setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
-      }
+      };
+      
+      recognition.onend = () => {
+        setIsVoiceMode(false);
+        setSpeechText('');
+        if (finalTranscriptText.trim()) {
+          const successLog: AgentLog = {
+            id: Math.random().toString(36).substring(7),
+            timestamp: new Date(),
+            agent: 'System',
+            message: `Audio signal captured successfully: "${finalTranscriptText}"`,
+            type: 'success'
+          };
+          setState(s => ({ ...s, logs: [...s.logs, successLog] }));
+          orchestrator.current?.run(finalTranscriptText);
+        }
+      };
+      
+      recognition.start();
+    } catch (e: any) {
+      console.error("Failed to start speech recognition:", e);
+      setIsVoiceMode(false);
+      setSpeechText('');
+      const errorLog: AgentLog = {
+        id: Math.random().toString(36).substring(7),
+        timestamp: new Date(),
+        agent: 'System',
+        message: `Voice Initialization error: ${e.message}. Defaulting to logical keyboard input.`,
+        type: 'warning'
+      };
+      setState(s => ({ ...s, logs: [...s.logs, errorLog] }));
     }
   };
 
@@ -492,6 +654,52 @@ export default function App() {
     setState(INITIAL_STATE);
   };
 
+  const handleAdminProvisionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setProvError('');
+    setProvSuccess('');
+    if (!provName || !provEmail || !provPassword) {
+      setProvError('Please fill out all required fields.');
+      return;
+    }
+    setIsProvisioning(true);
+
+    try {
+      const body = {
+        email: provEmail,
+        password: provPassword,
+        name: provName,
+        role: provRole,
+        specialty: provRole === 'provider' ? provSpecialty : undefined
+      };
+
+      const response = await fetch(`${apiPrefix}/auth/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        setProvError(data.error || 'Provisioning failed');
+        setIsProvisioning(false);
+        return;
+      }
+
+      setProvSuccess(`Account Node for ${provName} successfully provisioned!`);
+      setProvName('');
+      setProvEmail('');
+      setProvPassword('');
+      
+      // Auto-refresh the user list
+      fetchDashboardData();
+    } catch (err: any) {
+      setProvError('Connection failed: ' + err.message);
+    } finally {
+      setIsProvisioning(false);
+    }
+  };
+
   const updateBookingStatus = async (bookingId: string, newStatus: string) => {
     try {
       const response = await fetch(`${apiPrefix}/bookings/${bookingId}/status`, {
@@ -536,7 +744,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-screen bg-[#0a0b10] text-[#e0e0e0] font-sans overflow-hidden">
+    <div className="flex flex-col md:flex-row h-screen bg-bg-dark text-text-primary font-sans overflow-hidden">
       
       {/* 1. Unauthenticated State / Auth Screen */}
       <AnimatePresence>
@@ -545,27 +753,33 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-[#0a0b10]/95 backdrop-blur-2xl z-[9999] flex items-center justify-center p-4"
+            className="fixed inset-0 bg-slate-50/95 backdrop-blur-2xl z-[9999] flex items-center justify-center p-4 overflow-y-auto py-8"
           >
-            <div className="bg-[#141620]/80 border border-white/10 w-full max-w-md rounded-[32px] overflow-hidden shadow-2xl flex flex-col p-8 backdrop-blur-md">
-              <div className="flex items-center gap-3 mb-8 justify-center">
-                <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center shadow-lg shadow-accent/20">
-                  <Zap className="w-6 h-6 text-black" />
+            <div className="bg-white/80 border border-slate-200/80 w-full max-w-md rounded-[32px] overflow-y-auto max-h-[90vh] shadow-2xl flex flex-col p-8 backdrop-blur-md">
+              <div className="flex flex-col items-center gap-2 mb-8">
+                <img 
+                  src="/zariya-logo.png" 
+                  alt="Zariya" 
+                  className="h-20 w-20 object-contain drop-shadow-lg"
+                  onError={(e) => { e.currentTarget.style.display='none'; }}
+                />
+                <div className="text-center">
+                  <span className="text-2xl font-black tracking-tighter text-[#5503A5]">ZARIYA</span>
+                  <p className="text-[10px] text-slate-400 uppercase tracking-[0.2em] font-mono mt-0.5">Autonomous Home Services</p>
                 </div>
-                <span className="text-2xl font-black tracking-tighter text-white">ZARIYA /</span>
               </div>
 
               {/* Toggles */}
-              <div className="flex bg-white/5 p-1 rounded-2xl mb-6 border border-white/5">
+              <div className="flex bg-slate-100 p-1 rounded-2xl mb-6 border border-slate-200/50">
                 <button 
                   onClick={() => { setAuthTab('login'); setAuthError(''); }}
-                  className={cn("flex-1 py-2.5 rounded-xl text-xs font-bold transition-all", authTab === 'login' ? "bg-accent text-black shadow-md shadow-accent/20" : "text-text-secondary hover:text-white")}
+                  className={cn("flex-1 py-2.5 rounded-xl text-xs font-bold transition-all", authTab === 'login' ? "bg-accent text-white shadow-md shadow-accent/20" : "text-text-secondary hover:text-accent")}
                 >
                   SIGN IN
                 </button>
                 <button 
                   onClick={() => { setAuthTab('register'); setAuthError(''); }}
-                  className={cn("flex-1 py-2.5 rounded-xl text-xs font-bold transition-all", authTab === 'register' ? "bg-accent text-black shadow-md shadow-accent/20" : "text-text-secondary hover:text-white")}
+                  className={cn("flex-1 py-2.5 rounded-xl text-xs font-bold transition-all", authTab === 'register' ? "bg-accent text-white shadow-md shadow-accent/20" : "text-text-secondary hover:text-accent")}
                 >
                   CREATE ACCOUNT
                 </button>
@@ -580,7 +794,7 @@ export default function App() {
                       value={nameInput}
                       onChange={(e) => setNameInput(e.target.value)}
                       placeholder="e.g. Ayesha Khan"
-                      className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm font-semibold text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
                     />
                   </div>
                 )}
@@ -592,7 +806,7 @@ export default function App() {
                     value={emailInput}
                     onChange={(e) => setEmailInput(e.target.value)}
                     placeholder="customer@zariya.pk"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm font-semibold text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
                   />
                 </div>
 
@@ -603,36 +817,36 @@ export default function App() {
                     value={passwordInput}
                     onChange={(e) => setPasswordInput(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm font-semibold text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
                   />
                 </div>
 
                 {authTab === 'register' && (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest pl-2">Account Role</label>
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Account Role</label>
                       <select 
                         value={roleInput}
                         onChange={(e) => setRoleInput(e.target.value as any)}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm font-semibold text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all animate-none"
                       >
-                        <option value="customer" className="bg-[#141620]">Customer (Find Services)</option>
-                        <option value="provider" className="bg-[#141620]">Provider (Fulfill Services)</option>
+                        <option value="customer" className="bg-white">Customer (Find Services)</option>
+                        <option value="provider" className="bg-white">Provider (Fulfill Services)</option>
                       </select>
                     </div>
 
                     {roleInput === 'provider' && (
                       <div className="space-y-1.5">
-                        <label className="text-[10px] font-black text-text-secondary uppercase tracking-widest pl-2">Specialty Focus</label>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Specialty Focus</label>
                         <select 
                           value={specialtyInput}
                           onChange={(e) => setSpecialtyInput(e.target.value)}
-                          className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm font-semibold text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all animate-none"
                         >
-                          <option value="Plumber" className="bg-[#141620]">Plumbing Expert</option>
-                          <option value="Electrician" className="bg-[#141620]">Electrical Specialist</option>
-                          <option value="Carpenter" className="bg-[#141620]">Carpentry Node</option>
-                          <option value="AC Repair" className="bg-[#141620]">AC Climate Systems</option>
+                          <option value="Plumber" className="bg-white">Plumbing Expert</option>
+                          <option value="Electrician" className="bg-white">Electrical Specialist</option>
+                          <option value="Carpenter" className="bg-white">Carpentry Node</option>
+                          <option value="AC Repair" className="bg-white">AC Climate Systems</option>
                         </select>
                       </div>
                     )}
@@ -645,7 +859,7 @@ export default function App() {
 
                 <button 
                   type="submit"
-                  className="w-full bg-accent text-black font-black text-sm tracking-widest py-3 rounded-xl hover:scale-[1.02] active:scale-95 transition-all shadow-xl shadow-accent/25 mt-4"
+                  className="w-full bg-accent text-white font-bold text-sm tracking-widest py-3 rounded-xl hover:scale-[1.02] active:scale-95 transition-all shadow-md shadow-accent/25 mt-4 cursor-pointer"
                 >
                   {authTab === 'login' ? 'VERIFY NODE ACCESS' : 'PROVISION ACCOUNT NODE'}
                 </button>
@@ -656,12 +870,25 @@ export default function App() {
       </AnimatePresence>
 
       {/* Mobile Header (Visible only on small screens) */}
-      <header className="md:hidden flex items-center justify-between p-4 bg-[#0f111a] border-b border-white/5 z-30">
+      <header className="md:hidden flex items-center justify-between p-4 bg-white border-b border-slate-200/80 z-30 shadow-sm">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center">
-            <Zap className="w-5 h-5 text-black" />
+          {user && (
+            <button 
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-1.5 rounded-lg bg-slate-50 border border-slate-200/60 text-slate-650 hover:bg-slate-100 active:scale-95 transition-all"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+          <div className="flex items-center gap-2">
+            <img 
+              src="/zariya-logo.png" 
+              alt="Zariya" 
+              className="h-8 w-8 object-contain rounded-lg"
+              onError={(e) => { e.currentTarget.style.display='none'; }}
+            />
+            <span className="text-lg font-black tracking-tighter text-[#5503A5]">Zariya</span>
           </div>
-          <span className="text-lg font-black tracking-tighter text-white">Zariya</span>
         </div>
         <div className="flex items-center gap-2">
           {user && (
@@ -669,149 +896,119 @@ export default function App() {
               {user.role}
             </span>
           )}
-          <button onClick={handleLogout} className="p-1 rounded bg-white/5 text-text-secondary">
+          <button onClick={handleLogout} className="p-1 rounded bg-slate-100 text-slate-500 hover:text-slate-800 transition-colors">
             <LogOut className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-      {/* 2. Responsive Sidebar (Hidden on mobile) */}
-      <nav className="hidden md:flex w-64 border-r border-white/10 bg-[#0f111a]/95 flex-col p-6 z-20">
-        <div className="flex items-center gap-3 mb-10">
-          <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center shadow-lg shadow-accent/20">
-            <Zap className="w-5 h-5 text-black" />
-          </div>
-          <span className="text-xl font-bold tracking-tighter text-white">Zariya <span className="text-accent">/</span></span>
-        </div>
-
-        {/* Dynamic Sidebar Links Based on Role */}
-        <div className="space-y-1 flex-1">
-          {user?.role === 'customer' && (
-            <>
-              <SidebarItem 
-                icon={<LayoutDashboard className="w-5 h-5 text-text-secondary group-hover:text-accent transition-colors" />} 
-                label="Command Center" 
-                active={activeTab === 'dashboard'} 
-                onClick={() => setActiveTab('dashboard')}
-              />
-              <SidebarItem 
-                icon={<History className="w-5 h-5 text-text-secondary group-hover:text-accent transition-colors" />} 
-                label="Activity Log" 
-                active={activeTab === 'history'} 
-                onClick={() => setActiveTab('history')}
-              />
-            </>
-          )}
-
-          {user?.role === 'provider' && (
-            <>
-              <SidebarItem 
-                icon={<Activity className="w-5 h-5 text-text-secondary group-hover:text-accent transition-colors" />} 
-                label="My Dispatch Orders" 
-                active={activeTab === 'provider-orders'} 
-                onClick={() => setActiveTab('provider-orders')}
-              />
-              <SidebarItem 
-                icon={<Coins className="w-5 h-5 text-text-secondary group-hover:text-accent transition-colors" />} 
-                label="My Earnings" 
-                active={activeTab === 'provider-earnings'} 
-                onClick={() => setActiveTab('provider-earnings')}
-              />
-            </>
-          )}
-
-          {user?.role === 'admin' && (
-            <>
-              <SidebarItem 
-                icon={<LayoutDashboard className="w-5 h-5 text-text-secondary group-hover:text-accent transition-colors" />} 
-                label="All Bookings" 
-                active={activeTab === 'admin-bookings'} 
-                onClick={() => setActiveTab('admin-bookings')}
-              />
-              <SidebarItem 
-                icon={<Users className="w-5 h-5 text-text-secondary group-hover:text-accent transition-colors" />} 
-                label="User Management" 
-                active={activeTab === 'admin-users'} 
-                onClick={() => setActiveTab('admin-users')}
-              />
-            </>
-          )}
-          
-          <div className="pt-4 border-t border-white/5 mt-4">
-            <SidebarItem icon={<Cpu className="w-5 h-5 text-text-secondary" />} label="Agent Nodes" />
-            <SidebarItem icon={<Settings className="w-5 h-5 text-text-secondary" />} label="Parameters" />
-          </div>
-        </div>
-
-        {/* User Card & Logout */}
-        {user && (
-          <div className="mt-auto space-y-4">
-            <div className="flex items-center gap-3 p-3 bg-white/5 rounded-2xl border border-white/5">
-              <div className="w-8 h-8 rounded-full bg-accent flex items-center justify-center text-black text-xs font-black">
-                {user.name.charAt(0)}
+      {/* Mobile Sidebar Navigation Drawer Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <div className="fixed inset-0 z-[9999] flex md:hidden">
+            {/* Backdrop */}
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            />
+            {/* Drawer Content */}
+            <motion.div 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-80 max-w-[85vw] h-full bg-white shadow-2xl flex flex-col z-10"
+            >
+              <div className="absolute top-4 right-4 z-20">
+                <button 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold truncate text-white leading-tight">{user.name}</p>
-                <p className="text-[9px] font-black uppercase text-accent tracking-tighter mt-0.5">{user.role}</p>
+              <div className="flex-1 overflow-y-auto">
+                <Sidebar 
+                  activeTab={activeTab} 
+                  setActiveTab={(tab) => {
+                    setActiveTab(tab);
+                    setIsMobileMenuOpen(false);
+                  }} 
+                  user={user} 
+                  onLogout={() => {
+                    handleLogout();
+                    setIsMobileMenuOpen(false);
+                  }} 
+                />
               </div>
-              <button onClick={handleLogout} className="text-text-secondary hover:text-red-400 p-1">
-                <LogOut className="w-4.5 h-4.5" />
-              </button>
-            </div>
-            
-            <div className="flex items-center gap-3 p-3 bg-black/40 rounded-2xl border border-white/5 justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-[10px] font-bold tracking-widest text-text-secondary uppercase">Node Online</span>
-              </div>
-              <span className="text-[9px] font-mono text-accent">{state.regionCode}</span>
-            </div>
+            </motion.div>
           </div>
         )}
-      </nav>
+      </AnimatePresence>
+
+      {/* 2. Responsive Sidebar (Hidden on mobile) */}
+      <div className="hidden md:flex">
+        <Sidebar 
+          activeTab={activeTab} 
+          setActiveTab={(tab) => setActiveTab(tab)} 
+          user={user} 
+          onLogout={handleLogout} 
+        />
+      </div>
 
       {/* 3. Main Content Area */}
-      <main className="flex-1 flex flex-col relative overflow-hidden bg-[#0a0b10]">
+      <main className="flex-1 flex flex-col relative overflow-hidden bg-bg-dark">
         
         {/* ================== CUSTOMER: DASHBOARD TAB ================== */}
         {activeTab === 'dashboard' && user?.role === 'customer' && (
           <div className="flex-1 flex flex-col p-4 md:p-8 gap-4 md:gap-6 overflow-y-auto pb-24 md:pb-8">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
               <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
                   Mission Control <Sparkles className="w-5 h-5 text-accent" />
                 </h1>
                 <p className="text-text-secondary text-sm font-medium">Autonomous Service Orchestration Node</p>
               </div>
               
-              <div className="flex w-full md:w-auto bg-[#141620] border border-white/10 p-1 rounded-2xl shadow-lg">
+              <div className="flex w-full md:w-auto bg-white border border-slate-200/80 p-1 rounded-2xl shadow-sm">
                 <button 
-                  onClick={() => setIsVoiceMode(false)}
-                  className={cn("flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] md:text-xs font-bold transition-all", !isVoiceMode ? "bg-accent text-black shadow-md shadow-accent/20" : "text-text-secondary hover:text-white")}
+                  onClick={() => {
+                    if (recognitionRef.current) {
+                      try {
+                        recognitionRef.current.stop();
+                      } catch (e) {}
+                    }
+                    setIsVoiceMode(false);
+                    setSpeechText('');
+                  }}
+                  className={cn("flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] md:text-xs font-bold transition-all", !isVoiceMode ? "bg-accent text-white shadow-md shadow-accent/20" : "text-text-secondary hover:text-accent")}
                 >
                   Logical Input
                 </button>
                 <button 
                   onClick={toggleVoice}
-                  className={cn("flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] md:text-xs font-bold transition-all flex items-center justify-center gap-2", isVoiceMode ? "bg-accent text-black shadow-md shadow-accent/20" : "text-text-secondary hover:text-white")}
+                  className={cn("flex-1 md:flex-none px-4 py-2 rounded-xl text-[10px] md:text-xs font-bold transition-all flex items-center justify-center gap-2", isVoiceMode ? "bg-red-500 text-white shadow-md shadow-red-500/20 hover:bg-red-600" : "text-text-secondary hover:text-accent")}
                 >
-                  <Mic className="w-3 h-3" />
-                  Neural Voice
+                  <Mic className="w-3 h-3 animate-pulse" />
+                  {isVoiceMode ? "Stop Capture" : "Neural Voice"}
                 </button>
               </div>
             </header>
 
             <div className="flex flex-col lg:grid lg:grid-cols-12 gap-6 flex-1 min-h-0">
-              <div className="lg:col-span-8 flex flex-col gap-6 order-1 lg:order-1">
+              <div className={cn("flex flex-col gap-6 order-1 lg:order-1", state.selectedProvider ? "lg:col-span-8" : "lg:col-span-12")}>
                 {/* Input Card */}
-                <section className="bg-[#141620]/60 border border-white/10 rounded-[28px] p-4 md:p-6 shadow-2xl relative overflow-hidden backdrop-blur-md">
+                <section className="bg-white/80 border border-slate-200/80 rounded-[28px] p-4 md:p-6 shadow-xl relative overflow-hidden backdrop-blur-md">
                   <div className="flex flex-col gap-4">
                     <div className="relative">
                       <textarea 
                         value={input}
                         onChange={(e) => setInput(e.target.value)}
                         placeholder="Search services... (e.g. 'I need a plumber for water leakage')"
-                        className="w-full bg-black/40 border border-white/5 rounded-xl md:rounded-2xl p-4 md:p-6 text-sm md:text-base font-semibold text-white focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all min-h-[100px] md:min-h-[110px] resize-none"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl md:rounded-2xl p-4 md:p-6 text-sm md:text-base font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all min-h-[100px] md:min-h-[110px] resize-none"
                       />
                       <AnimatePresence>
                         {isVoiceMode && (
@@ -819,7 +1016,16 @@ export default function App() {
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            className="absolute inset-0 bg-accent/95 backdrop-blur-md rounded-xl md:rounded-2xl flex items-center justify-center gap-4 md:gap-6 text-black text-center"
+                            className="absolute inset-0 bg-accent/95 backdrop-blur-md rounded-xl md:rounded-2xl flex flex-col items-center justify-center gap-3 md:gap-4 text-white text-center p-4 cursor-pointer"
+                            onClick={() => {
+                              if (recognitionRef.current) {
+                                try {
+                                  recognitionRef.current.stop();
+                                } catch (e) {}
+                              }
+                              setIsVoiceMode(false);
+                              setSpeechText('');
+                            }}
                           >
                             <div className="flex gap-1 items-end h-6 md:h-8">
                               {[1, 2, 3, 4, 5].map((i) => (
@@ -827,54 +1033,81 @@ export default function App() {
                                   key={i}
                                   animate={{ height: [8, 24, 12, 18, 8] }}
                                   transition={{ repeat: Infinity, duration: 1, delay: i * 0.1 }}
-                                  className="w-1.5 md:w-2 bg-black rounded-full"
+                                  className="w-1.5 md:w-2 bg-white rounded-full"
                                 />
                               ))}
                             </div>
-                            <span className="font-black text-xs md:text-sm uppercase tracking-widest md:tracking-[0.2em]">Neural Signal Capture...</span>
+                            <span className="font-black text-xs md:text-sm uppercase tracking-widest md:tracking-[0.2em] text-white/90">Neural Signal Capture...</span>
+                            <div className="max-w-md bg-white/10 px-6 py-3 rounded-2xl border border-white/10 shadow-inner mt-1">
+                              <p className="text-sm md:text-base font-extrabold text-white">
+                                "{speechText || 'Listening... speak now'}"
+                              </p>
+                            </div>
+                            <span className="text-[9px] text-white/50 uppercase font-bold tracking-widest animate-pulse mt-1">Click anywhere or button to Stop/Cancel</span>
                           </motion.div>
                         )}
                       </AnimatePresence>
                     </div>
+
+                    {state.userLocation?.address && (
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest mr-2">📍 Live GPS Address Node:</span>
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const landmark = state.userLocation?.address || "";
+                            setInput(prev => {
+                              const base = prev.trim();
+                              if (!base) return `I need service near ${landmark}`;
+                              if (base.toLowerCase().includes(landmark.toLowerCase())) return prev;
+                              return `${base} near ${landmark}`;
+                            });
+                          }}
+                          className="text-[10px] font-bold bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 shadow-sm shadow-accent/5 cursor-pointer hover:scale-[1.02] active:scale-95"
+                        >
+                          <span className="animate-pulse">📍</span> Use My Live Location: <span className="underline font-extrabold">{state.userLocation.address}</span>
+                        </button>
+                      </div>
+                    )}
 
                     {/* Quick Category Selection (Module 2) */}
                     <div className="flex flex-wrap gap-2 items-center">
                       <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest mr-2">Quick Category:</span>
                       <button 
                         onClick={() => handleCategoryClick("I need a plumber for water leak repair in Gulberg Lahore")}
-                        className="text-[10px] font-bold bg-white/5 border border-white/10 hover:border-accent hover:text-white px-3 py-1.5 rounded-full transition-all text-text-secondary"
+                        className="text-[10px] font-bold bg-slate-100/80 border border-slate-200 hover:border-accent hover:text-accent px-3 py-1.5 rounded-full transition-all text-text-secondary"
                       >
                         🔧 Plumber
                       </button>
                       <button 
                         onClick={() => handleCategoryClick("Need an electrician urgent short circuit fault repair")}
-                        className="text-[10px] font-bold bg-white/5 border border-white/10 hover:border-accent hover:text-white px-3 py-1.5 rounded-full transition-all text-text-secondary"
+                        className="text-[10px] font-bold bg-slate-100/80 border border-slate-200 hover:border-accent hover:text-accent px-3 py-1.5 rounded-full transition-all text-text-secondary"
                       >
                         ⚡ Electrician
                       </button>
                       <button 
                         onClick={() => handleCategoryClick("Looking for a carpenter to fix cabinet door hinges")}
-                        className="text-[10px] font-bold bg-white/5 border border-white/10 hover:border-accent hover:text-white px-3 py-1.5 rounded-full transition-all text-text-secondary"
+                        className="text-[10px] font-bold bg-slate-100/80 border border-slate-200 hover:border-accent hover:text-accent px-3 py-1.5 rounded-full transition-all text-text-secondary"
                       >
                         🔨 Carpenter
                       </button>
                       <button 
                         onClick={() => handleCategoryClick("Require AC compressor servicing technician in Karachi Sindh Pakistan")}
-                        className="text-[10px] font-bold bg-[#00f2ff]/10 border border-[#00f2ff]/30 text-accent hover:bg-accent hover:text-black px-3 py-1.5 rounded-full transition-all"
+                        className="text-[10px] font-bold bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white px-3 py-1.5 rounded-full transition-all"
                       >
                         📍 AC Karachi (Test Location)
                       </button>
                     </div>
 
-                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-2 pt-2 border-t border-white/5">
+                    <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-2 pt-2 border-t border-slate-200/50">
                       <div className="hidden sm:flex items-center gap-2 text-[10px] font-black text-text-secondary uppercase tracking-widest">
                         <Globe className="w-3 h-3 text-accent animate-spin-slow" />
-                        Region: <span className="text-white font-semibold">{state.regionCode}</span>
+                        Region: <span className="text-slate-800 font-semibold">{state.regionCode}</span>
                       </div>
                       <button 
                         onClick={handleStart}
                         disabled={state.isProcessing || !input.trim()}
-                        className="w-full sm:w-auto bg-accent text-black px-8 py-3.5 rounded-xl md:rounded-2xl font-black tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-accent/20 text-xs"
+                        className="w-full sm:w-auto bg-accent text-white px-8 py-3.5 rounded-xl md:rounded-2xl font-black tracking-widest hover:scale-105 active:scale-95 transition-all disabled:opacity-50 shadow-xl shadow-accent/20 text-xs hover:bg-accent/90"
                       >
                         {state.isProcessing ? 'COMMUNICATING...' : 'INITIALIZE PIPELINE'}
                       </button>
@@ -883,10 +1116,13 @@ export default function App() {
                 </section>
 
                 {/* Map Section */}
-                <section className="h-[300px] md:flex-1 bg-[#141620]/60 border border-white/10 rounded-[28px] overflow-hidden shadow-2xl relative flex flex-col backdrop-blur-md">
-                  <div className="absolute top-4 left-4 z-10 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg border border-white/10 shadow-sm flex items-center gap-2">
+                <section className={cn(
+                  "bg-white/80 border border-slate-200/80 rounded-[28px] overflow-hidden shadow-xl relative flex flex-col backdrop-blur-md md:flex-1",
+                  state.isAwaitingSelection ? "h-[500px]" : "h-[300px]"
+                )}>
+                  <div className="absolute top-4 left-4 z-10 bg-white/95 backdrop-blur-md px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-sm flex items-center gap-2">
                     <MapIcon className="w-3 h-3 text-accent" />
-                    <span className="text-[10px] font-black tracking-widest uppercase text-white">Spatial Grid</span>
+                    <span className="text-[10px] font-black tracking-widest uppercase text-slate-800">Spatial Grid</span>
                   </div>
                   <div className="flex-1 min-h-0">
                     <MapView 
@@ -901,41 +1137,41 @@ export default function App() {
                     <motion.div 
                       initial={{ y: 100, opacity: 0 }}
                       animate={{ y: 0, opacity: 1 }}
-                      className="bg-[#0f111a] border-t border-white/10 p-5 max-h-[300px] overflow-y-auto"
+                      className="bg-slate-50 border-t border-slate-200/80 p-5 max-h-[300px] overflow-y-auto"
                     >
-                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 border-b border-white/5 pb-3">
+                      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 border-b border-slate-200/40 pb-3">
                         <div className="flex items-center gap-2">
                           <ShieldCheck className="w-4 h-4 text-accent" />
-                          <h2 className="text-[10px] font-black text-white uppercase tracking-widest">Autonomous Matches</h2>
+                          <h2 className="text-[10px] font-black text-slate-800 uppercase tracking-widest">Autonomous Matches</h2>
                         </div>
                         
                         {/* Filters & Sorting Control */}
                         <div className="flex items-center gap-3 flex-wrap">
-                          <div className="flex items-center gap-1 text-[9px] text-text-secondary bg-white/5 border border-white/5 px-2 py-1 rounded-lg">
+                          <div className="flex items-center gap-1 text-[9px] text-text-secondary bg-slate-100 border border-slate-200/60 px-2 py-1 rounded-lg">
                             <SlidersHorizontal className="w-3 h-3 text-accent" />
                             <span>Sort:</span>
                             <select 
                               value={sortBy} 
                               onChange={(e) => setSortBy(e.target.value as any)}
-                              className="bg-transparent text-white font-bold outline-none border-none cursor-pointer"
+                              className="bg-transparent text-slate-800 font-bold outline-none border-none cursor-pointer"
                             >
-                              <option value="trust" className="bg-[#141620]">Trust Index</option>
-                              <option value="price_asc" className="bg-[#141620]">Price: Low to High</option>
-                              <option value="price_desc" className="bg-[#141620]">Price: High to Low</option>
-                              <option value="rating" className="bg-[#141620]">Rating</option>
+                              <option value="trust" className="bg-white text-slate-800">Trust Index</option>
+                              <option value="price_asc" className="bg-white text-slate-800">Price: Low to High</option>
+                              <option value="price_desc" className="bg-white text-slate-800">Price: High to Low</option>
+                              <option value="rating" className="bg-white text-slate-800">Rating</option>
                             </select>
                           </div>
 
-                          <div className="flex items-center gap-1 text-[9px] text-text-secondary bg-white/5 border border-white/5 px-2 py-1 rounded-lg">
+                          <div className="flex items-center gap-1 text-[9px] text-text-secondary bg-slate-100 border border-slate-200/60 px-2 py-1 rounded-lg">
                             <span>Rating:</span>
                             <select 
                               value={minRating} 
                               onChange={(e) => setMinRating(Number(e.target.value))}
-                              className="bg-transparent text-white font-bold outline-none border-none cursor-pointer"
+                              className="bg-transparent text-slate-800 font-bold outline-none border-none cursor-pointer"
                             >
-                              <option value={0} className="bg-[#141620]">All</option>
-                              <option value={4} className="bg-[#141620]">4.0+ ★</option>
-                              <option value={4.5} className="bg-[#141620]">4.5+ ★</option>
+                              <option value={0} className="bg-white text-slate-800">All</option>
+                              <option value={4} className="bg-white text-slate-800">4.0+ ★</option>
+                              <option value={4.5} className="bg-white text-slate-800">4.5+ ★</option>
                             </select>
                           </div>
                         </div>
@@ -953,26 +1189,26 @@ export default function App() {
                               "p-4 rounded-2xl border transition-all flex items-center justify-between text-left group gap-3 relative overflow-hidden",
                               state.selectedProvider?.id === p.id 
                                 ? "bg-accent/5 border-accent shadow-lg shadow-accent/5" 
-                                : "bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10"
+                                : "bg-white border-slate-200/80 hover:bg-slate-50 hover:border-slate-300 shadow-sm"
                             )}
                           >
                             <div className="flex items-center gap-3 relative z-10">
                               <div className={cn(
                                 "w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm transition-colors",
-                                state.selectedProvider?.id === p.id ? "bg-accent text-black" : "bg-black/50 text-text-secondary group-hover:text-accent"
+                                state.selectedProvider?.id === p.id ? "bg-accent text-white" : "bg-slate-100 text-text-secondary group-hover:text-accent"
                               )}>
                                 {p.name.charAt(0)}
                               </div>
                               <div>
-                                <h4 className="font-bold text-white text-sm leading-tight group-hover:text-accent transition-colors">{p.name}</h4>
+                                <h4 className="font-bold text-slate-800 text-sm leading-tight group-hover:text-accent transition-colors">{p.name}</h4>
                                 <div className="flex items-center gap-2 mt-1">
                                   <span className="text-[9px] text-text-secondary">{p.rating} ★</span>
-                                  <span className="text-[9px] text-emerald-500 font-bold">{(p.trustScore * 100).toFixed(0)}% TRUST</span>
+                                  <span className="text-[9px] text-emerald-600 font-bold">{(p.trustScore * 100).toFixed(0)}% TRUST</span>
                                 </div>
                               </div>
                             </div>
                             <div className="text-right relative z-10">
-                              <div className="text-xs font-black text-white">PKR {p.pricing.total}</div>
+                              <div className="text-xs font-black text-slate-800">PKR {p.pricing.total}</div>
                               <div className="text-[8px] font-bold text-accent uppercase tracking-wider mt-0.5">{p.eta}</div>
                             </div>
                           </button>
@@ -988,28 +1224,28 @@ export default function App() {
                         initial={{ opacity: 0, y: 50 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 50 }}
-                        className="absolute bottom-4 left-4 right-4 bg-[#141620]/95 backdrop-blur-xl border border-white/10 p-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 z-[999]"
+                        className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 z-[999]"
                       >
                         <div className="flex items-center gap-3 w-full sm:w-auto">
-                          <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center text-black text-xl font-black shadow-lg shadow-accent/20">
+                          <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center text-white text-xl font-black shadow-lg shadow-accent/20">
                             {state.selectedProvider.name.charAt(0)}
                           </div>
                           <div>
-                            <h3 className="text-base font-black text-white leading-tight">{state.selectedProvider.name}</h3>
+                            <h3 className="text-base font-black text-slate-900 leading-tight">{state.selectedProvider.name}</h3>
                             <div className="flex items-center gap-2 mt-1">
-                              <span className="text-[10px] font-bold text-text-secondary bg-white/5 px-2 py-0.5 rounded-md uppercase">{state.selectedProvider.specialty}</span>
+                              <span className="text-[10px] font-bold text-text-secondary bg-slate-100 px-2 py-0.5 rounded-md uppercase">{state.selectedProvider.specialty}</span>
                               <span className="text-[10px] font-black text-accent uppercase">{state.selectedProvider.eta} AWAY</span>
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto border-t sm:border-t-0 border-white/5 pt-2 sm:pt-0">
+                        <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto border-t sm:border-t-0 border-slate-200/40 pt-2 sm:pt-0">
                           <div className="text-left sm:text-right">
                             <div className="text-[8px] font-black text-text-secondary uppercase tracking-widest mb-0.5">EST. FEE</div>
-                            <div className="text-lg font-black text-white">PKR {state.selectedProvider.pricing.total}</div>
+                            <div className="text-lg font-black text-slate-900">PKR {state.selectedProvider.pricing.total}</div>
                           </div>
                           <button 
                             onClick={handleConfirmBooking}
-                            className="bg-accent text-black px-6 py-3 rounded-xl font-black text-xs shadow-xl shadow-accent/25 hover:scale-105 active:scale-95 transition-all tracking-wider"
+                            className="bg-accent text-white px-6 py-3 rounded-xl font-black text-xs shadow-xl shadow-accent/25 hover:scale-105 active:scale-95 transition-all tracking-wider"
                           >
                             BOOK NOW
                           </button>
@@ -1021,93 +1257,25 @@ export default function App() {
               </div>
 
               {/* Right Side: Agent Sequence + Telemetry + Trust Panel */}
-              <div className="lg:col-span-4 flex flex-col gap-6 order-2 lg:order-2">
-                
-                {/* Agent Sequence Panel */}
-                <div className="hidden md:flex bg-[#141620]/60 border border-white/10 rounded-[28px] p-5 shadow-2xl flex-col gap-4 backdrop-blur-md">
-                  <div className="flex items-center justify-between border-b border-white/5 pb-2">
-                    <div className="flex items-center gap-2">
-                      <Terminal className="w-4 h-4 text-accent" />
-                      <span className="text-[10px] font-black tracking-widest uppercase text-text-secondary">Orchestration DAG</span>
-                    </div>
-                    <div className="w-2 h-2 rounded-full bg-accent animate-pulse" />
-                  </div>
-
-                  <div className="flex flex-col gap-3">
-                    {AGENT_SEQUENCE.map((agent, i) => {
-                      const status = state.timeline[agent] || 'idle';
-                      return (
-                        <div key={agent} className="flex items-center gap-3">
-                          <div className="relative flex flex-col items-center">
-                            <div className={cn(
-                              "w-2 h-2 rounded-full border transition-all duration-300 z-10",
-                              status === 'processing' && "bg-accent border-accent shadow-[0_0_8px_var(--color-accent-glow)] scale-125 animate-pulse",
-                              status === 'completed' && "bg-emerald-500 border-emerald-500",
-                              status === 'idle' && "border-white/10 bg-transparent"
-                            )} />
-                            {i < AGENT_SEQUENCE.length - 1 && <div className="absolute top-2 w-[1px] h-6 bg-white/5" />}
-                          </div>
-                          <span className={cn(
-                            "text-[9px] font-black uppercase tracking-widest transition-colors flex-1",
-                            status === 'processing' && "text-accent",
-                            status === 'completed' && "text-white",
-                            status === 'idle' && "text-text-secondary opacity-50"
-                          )}>{agent}</span>
-                          {status === 'completed' && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
-                        </div>
-                      );
-                    })}
-                  </div>
+              {state.selectedProvider && (
+                <div className="lg:col-span-4 flex flex-col gap-6 order-2 lg:order-2">
+                  {/* Trust Analysis Panel */}
+                  <TrustAnalysisPanel provider={state.selectedProvider} />
                 </div>
-
-                {/* Telemetry Stream */}
-                <div className="flex-1 bg-[#141620]/60 border border-white/10 rounded-[28px] p-5 shadow-2xl overflow-hidden flex flex-col min-h-[250px] backdrop-blur-md">
-                  <div className="flex items-center gap-2 mb-3 border-b border-white/5 pb-2">
-                    <Activity className="w-4 h-4 text-accent" />
-                    <span className="text-[10px] font-black tracking-widest uppercase text-text-secondary">Telemetry Signals</span>
-                  </div>
-                  
-                  <div className="flex-1 overflow-y-auto space-y-3 font-mono text-[9px] pr-2">
-                    {state.logs.map((log) => (
-                      <div key={log.id} className="flex flex-col gap-1 border-l border-white/10 pl-3 py-1">
-                        <div className="flex gap-2">
-                          <span className="text-slate-600">[{log.timestamp.toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })}]</span>
-                          <span className={cn(
-                            "flex-1 leading-normal",
-                            log.type === 'success' ? "text-accent font-bold" : 
-                            log.type === 'error' ? "text-red-400 font-bold" : "text-text-primary"
-                          )}>
-                            <span className="text-text-secondary font-bold mr-1.5">[{log.agent.substring(0,3).toUpperCase()}]</span>
-                            {log.message}
-                          </span>
-                        </div>
-                        {log.reasoning && (
-                          <div className="text-[8px] text-text-secondary italic mt-0.5 border-t border-white/5 pt-0.5 leading-relaxed">
-                            ↳ {log.reasoning}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                    <div ref={logsEndRef} />
-                  </div>
-                </div>
-
-                {/* Trust Analysis Panel */}
-                <TrustAnalysisPanel provider={state.selectedProvider} />
-              </div>
+              )}
             </div>
           </div>
         )}
 
         {/* ================== CUSTOMER: HISTORY TAB ================== */}
         {activeTab === 'history' && user?.role === 'customer' && (
-          <div className="flex-1 p-4 md:p-8 bg-[#0a0b10] flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white/5 pb-4">
+          <div className="flex-1 p-4 md:p-8 bg-bg-dark flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-slate-200/40 pb-4">
               <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white">Activity Protocol</h1>
+                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900">Activity Protocol</h1>
                 <p className="text-text-secondary font-medium uppercase tracking-widest text-[9px] mt-1">Historical Service Trace Index</p>
               </div>
-              <div className="bg-[#141620] border border-white/10 px-4 py-2.5 rounded-xl">
+              <div className="bg-white border border-slate-200/80 px-4 py-2.5 rounded-xl">
                 <div className="text-[8px] font-black text-text-secondary uppercase tracking-widest mb-0.5">Total bookings</div>
                 <div className="text-lg font-black text-accent">{state.history.length.toString().padStart(2, '0')}</div>
               </div>
@@ -1115,7 +1283,7 @@ export default function App() {
 
             <div className="grid grid-cols-1 gap-3">
               {state.history.length === 0 ? (
-                <div className="py-20 flex flex-col items-center justify-center text-text-secondary gap-3 bg-[#141620]/20 rounded-3xl border border-white/5">
+                <div className="py-20 flex flex-col items-center justify-center text-text-secondary gap-3 bg-slate-100/50 rounded-3xl border border-slate-200/60">
                   <History className="w-10 h-10 opacity-20" />
                   <p className="font-bold uppercase tracking-widest text-[10px]">No historical bookings detected</p>
                 </div>
@@ -1126,23 +1294,23 @@ export default function App() {
                     animate={{ opacity: 1, y: 0 }}
                     key={item.id} 
                     className={cn(
-                      "group bg-[#141620]/40 border p-4 rounded-2xl hover:shadow-lg transition-all flex flex-col md:flex-row md:items-center justify-between gap-4",
-                      item.status === 'Processing' ? "border-accent/30 bg-accent/[0.02]" : "border-white/5 hover:border-white/10"
+                      "group bg-white border p-4 rounded-2xl hover:shadow-lg transition-all flex flex-col md:flex-row md:items-center justify-between gap-4",
+                      item.status === 'Processing' ? "border-accent/30 bg-accent/[0.02]" : "border-slate-200/80 hover:border-slate-350"
                     )}
                   >
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                        item.status === 'Processing' ? "bg-accent/15 text-accent animate-pulse" : "bg-emerald-500/10 text-emerald-400"
+                        item.status === 'Processing' ? "bg-accent/15 text-accent animate-pulse" : "bg-emerald-500/10 text-emerald-600"
                       )}>
                         {item.status === 'Processing' ? <Activity className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
                       </div>
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
-                          <h4 className="font-black text-white text-sm md:text-base">{item.service}</h4>
+                          <h4 className="font-black text-slate-800 text-sm md:text-base">{item.service}</h4>
                           <span className={cn(
                             "text-[8px] px-2 py-0.5 rounded-full font-bold uppercase tracking-tight",
-                            item.status === 'Processing' ? "bg-accent text-black" : "bg-white/10 text-text-secondary"
+                            item.status === 'Processing' ? "bg-accent text-white" : "bg-slate-100 text-slate-600 border border-slate-200/60"
                           )}>{item.status}</span>
                         </div>
                         <p className="text-[9px] text-text-secondary font-semibold uppercase tracking-wider mt-1">
@@ -1151,14 +1319,14 @@ export default function App() {
                       </div>
                     </div>
                     
-                    <div className="flex items-center justify-between md:justify-end gap-6 pl-14 md:pl-0 border-t md:border-t-0 border-white/5 pt-2 md:pt-0">
+                    <div className="flex items-center justify-between md:justify-end gap-6 pl-14 md:pl-0 border-t md:border-t-0 border-slate-200/40 pt-2 md:pt-0">
                       <div className="text-left md:text-right">
                         <div className="text-[8px] font-black text-text-secondary uppercase tracking-widest mb-0.5">Target Location</div>
-                        <div className="text-[10px] font-bold text-white max-w-[120px] truncate">{item.location}</div>
+                        <div className="text-[10px] font-bold text-slate-700 max-w-[120px] truncate">{item.location}</div>
                       </div>
                       <div className="text-right">
                         <div className="text-[8px] font-black text-text-secondary uppercase tracking-widest mb-0.5">Est. Price</div>
-                        <div className="text-sm font-black text-white">
+                        <div className="text-sm font-black text-slate-800">
                           {item.totalAmount ? `PKR ${item.totalAmount}` : '---'}
                         </div>
                       </div>
@@ -1169,32 +1337,29 @@ export default function App() {
             </div>
           </div>
         )}
-
-
-        {/* ================== PROVIDER: DISPATCH ORDERS TAB ================== */}
         {activeTab === 'provider-orders' && user?.role === 'provider' && (
-          <div className="flex-1 p-4 md:p-8 bg-[#0a0b10] flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-4">
+          <div className="flex-1 p-4 md:p-8 bg-bg-dark flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200/40 pb-4">
               <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
                   Provider Terminal <span className="text-accent">/</span> {user.name}
                 </h1>
                 <p className="text-text-secondary text-sm font-medium uppercase tracking-widest text-[9px] mt-1">{user.specialty} Node Operator</p>
               </div>
 
               {/* Toggle Availability */}
-              <div className="flex items-center gap-3 bg-[#141620] border border-white/10 px-4 py-2 rounded-2xl">
+              <div className="flex items-center gap-3 bg-white border border-slate-200/80 px-4 py-2 rounded-2xl shadow-sm">
                 <span className="text-[10px] font-black text-text-secondary uppercase tracking-wider">Availability:</span>
                 <button 
                   onClick={() => setIsAvailable(!isAvailable)}
                   className={cn(
                     "relative inline-flex h-5 w-10 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                    isAvailable ? "bg-accent" : "bg-white/10"
+                    isAvailable ? "bg-accent" : "bg-slate-200"
                   )}
                 >
                   <span 
                     className={cn(
-                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-black shadow ring-0 transition duration-200 ease-in-out",
+                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
                       isAvailable ? "translate-x-5" : "translate-x-0"
                     )}
                   />
@@ -1207,61 +1372,61 @@ export default function App() {
 
             {/* Quick Metrics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-[#141620]/40 border border-white/5 p-4 rounded-2xl flex flex-col justify-between">
+              <div className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between shadow-sm">
                 <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Active Jobs</span>
-                <span className="text-xl font-black text-white mt-1">
+                <span className="text-xl font-black text-slate-800 mt-1">
                   {providerBookings.filter(b => b.status === 'Pending' || b.status === 'Confirmed' || b.status === 'Processing').length}
                 </span>
               </div>
-              <div className="bg-[#141620]/40 border border-white/5 p-4 rounded-2xl flex flex-col justify-between">
+              <div className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between shadow-sm">
                 <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Job Specialty</span>
                 <span className="text-sm font-black text-accent mt-1 uppercase">{user.specialty || 'General'}</span>
               </div>
-              <div className="bg-[#141620]/40 border border-white/5 p-4 rounded-2xl flex flex-col justify-between">
+              <div className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between shadow-sm">
                 <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Completed Node Ops</span>
-                <span className="text-xl font-black text-white mt-1">
+                <span className="text-xl font-black text-slate-800 mt-1">
                   {providerBookings.filter(b => b.status === 'Completed').length}
                 </span>
               </div>
-              <div className="bg-[#141620]/40 border border-white/5 p-4 rounded-2xl flex flex-col justify-between">
+              <div className="bg-white border border-slate-200/80 p-4 rounded-2xl flex flex-col justify-between shadow-sm">
                 <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Aggregate Rating</span>
-                <span className="text-xl font-black text-white mt-1">4.8 ★</span>
+                <span className="text-xl font-black text-slate-800 mt-1">4.8 ★</span>
               </div>
             </div>
 
             {/* Orders list */}
             <div className="space-y-3">
-              <h2 className="text-[10px] font-black uppercase text-white tracking-widest">Assigned Dispatch Queue</h2>
+              <h2 className="text-[10px] font-black uppercase text-slate-800 tracking-widest">Assigned Dispatch Queue</h2>
               
               {providerBookings.length === 0 ? (
-                <div className="py-16 text-center text-text-secondary bg-[#141620]/20 rounded-3xl border border-white/5 flex flex-col items-center justify-center gap-2">
+                <div className="py-16 text-center text-text-secondary bg-slate-100/50 rounded-3xl border border-slate-200/60 flex flex-col items-center justify-center gap-2">
                   <Activity className="w-8 h-8 opacity-25 text-accent" />
                   <p className="font-bold text-xs uppercase tracking-widest">No service requests in dispatch queue</p>
                 </div>
               ) : (
                 providerBookings.map((b: any) => (
-                  <div key={b.id} className="bg-[#141620]/40 border border-white/5 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div key={b.id} className="bg-white border border-slate-200/80 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[9px] font-mono text-accent bg-accent/5 px-2 py-0.5 rounded border border-accent/15">{b.id}</span>
                         <span className={cn(
                           "text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-tighter",
-                          b.status === 'Pending' ? "bg-amber-400/10 text-amber-400" :
-                          b.status === 'Confirmed' ? "bg-accent/10 text-accent animate-pulse" :
-                          b.status === 'Completed' ? "bg-emerald-500/10 text-emerald-400" : "bg-red-400/10 text-red-400"
+                          b.status === 'Pending' ? "bg-amber-400/10 text-amber-600 border border-amber-200/50" :
+                          b.status === 'Confirmed' ? "bg-accent/10 text-accent animate-pulse border border-accent/20" :
+                          b.status === 'Completed' ? "bg-emerald-500/10 text-emerald-600 border border-emerald-200/50" : "bg-red-400/10 text-red-650 border border-red-200/50"
                         )}>
                           {b.status}
                         </span>
                       </div>
-                      <p className="text-sm font-black text-white pt-1">Service Request: <span className="text-accent">{b.intent?.service || b.provider?.specialty}</span></p>
+                      <p className="text-sm font-black text-slate-800 pt-1">Service Request: <span className="text-accent">{b.intent?.service || b.provider?.specialty}</span></p>
                       <p className="text-xs text-text-primary"><b>Location:</b> {b.intent?.location || b.provider?.location?.address}</p>
                       <p className="text-xs text-text-secondary flex items-center gap-1.5"><Phone className="w-3.5 h-3.5" /> <b>Contact:</b> {b.customerContact}</p>
                     </div>
 
-                    <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 border-white/5 pt-3 md:pt-0">
+                    <div className="flex items-center justify-between md:justify-end gap-6 border-t md:border-t-0 border-slate-200/40 pt-3 md:pt-0">
                       <div className="text-left md:text-right">
                         <p className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Job Fee</p>
-                        <p className="text-base font-black text-white">PKR {b.provider?.pricing?.total}</p>
+                        <p className="text-base font-black text-slate-800">PKR {b.provider?.pricing?.total}</p>
                       </div>
 
                       {/* Action buttons */}
@@ -1269,7 +1434,7 @@ export default function App() {
                         {b.status === 'Pending' && (
                           <button 
                             onClick={() => updateBookingStatus(b.id, 'Confirmed')}
-                            className="bg-accent text-black font-black text-[10px] tracking-wider px-3.5 py-2 rounded-xl flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                            className="bg-accent text-white font-black text-[10px] tracking-wider px-3.5 py-2 rounded-xl flex items-center gap-1 hover:scale-105 active:scale-95 transition-all shadow-md shadow-accent/10"
                           >
                             <Check className="w-3.5 h-3.5" /> ACCEPT DISPATCH
                           </button>
@@ -1277,7 +1442,7 @@ export default function App() {
                         {b.status === 'Confirmed' && (
                           <button 
                             onClick={() => updateBookingStatus(b.id, 'Completed')}
-                            className="bg-emerald-500 text-black font-black text-[10px] tracking-wider px-3.5 py-2 rounded-xl flex items-center gap-1 hover:scale-105 active:scale-95 transition-all"
+                            className="bg-emerald-600 text-white font-black text-[10px] tracking-wider px-3.5 py-2 rounded-xl flex items-center gap-1 hover:scale-105 active:scale-95 transition-all shadow-md shadow-emerald-600/10"
                           >
                             <CheckCircle2 className="w-3.5 h-3.5" /> COMPLETE JOB
                           </button>
@@ -1285,7 +1450,7 @@ export default function App() {
                         {(b.status === 'Pending' || b.status === 'Confirmed') && (
                           <button 
                             onClick={() => updateBookingStatus(b.id, 'Cancelled')}
-                            className="bg-red-500/15 border border-red-500/30 text-red-400 font-bold text-[10px] tracking-wider px-3.5 py-2 rounded-xl flex items-center gap-1 hover:bg-red-500 hover:text-black transition-all"
+                            className="bg-red-50/80 border border-red-200 text-red-650 font-bold text-[10px] tracking-wider px-3.5 py-2 rounded-xl flex items-center gap-1 hover:bg-red-600 hover:text-white transition-all"
                           >
                             <X className="w-3.5 h-3.5" /> REJECT
                           </button>
@@ -1301,41 +1466,41 @@ export default function App() {
 
         {/* ================== PROVIDER: EARNINGS TAB ================== */}
         {activeTab === 'provider-earnings' && user?.role === 'provider' && (
-          <div className="flex-1 p-4 md:p-8 bg-[#0a0b10] flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
-            <header className="border-b border-white/5 pb-4">
-              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+          <div className="flex-1 p-4 md:p-8 bg-bg-dark flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
+            <header className="border-b border-slate-200/40 pb-4">
+              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
                 Earnings Registry <span className="text-accent">/</span> {user.name}
               </h1>
               <p className="text-text-secondary text-sm font-medium uppercase tracking-widest text-[9px] mt-1">Financial Node Account</p>
             </header>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-br from-[#141620] to-[#0f111a] border border-white/10 p-6 rounded-3xl flex flex-col justify-between">
+              <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-200/80 p-6 rounded-3xl flex flex-col justify-between shadow-sm">
                 <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Total Net Income</span>
                 <span className="text-3xl font-black text-accent mt-3">PKR 14,800</span>
                 <p className="text-[9px] text-text-secondary mt-2">Available for payout: PKR 11,400</p>
               </div>
 
-              <div className="bg-[#141620]/40 border border-white/5 p-6 rounded-3xl flex flex-col justify-between">
+              <div className="bg-white border border-slate-200/80 p-6 rounded-3xl flex flex-col justify-between shadow-sm">
                 <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Fulfillment Rate</span>
-                <span className="text-2xl font-black text-white mt-3">100.0%</span>
-                <p className="text-[9px] text-emerald-400 mt-2">Perfect performance score</p>
+                <span className="text-2xl font-black text-slate-800 mt-3">100.0%</span>
+                <p className="text-[9px] text-emerald-600 mt-2">Perfect performance score</p>
               </div>
 
-              <div className="bg-[#141620]/40 border border-white/5 p-6 rounded-3xl flex flex-col justify-between">
+              <div className="bg-white border border-slate-200/80 p-6 rounded-3xl flex flex-col justify-between shadow-sm">
                 <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest">Avg Transaction Value</span>
-                <span className="text-2xl font-black text-white mt-3">PKR 1,850</span>
+                <span className="text-2xl font-black text-slate-800 mt-3">PKR 1,850</span>
                 <p className="text-[9px] text-text-secondary mt-2">Across 8 completed dispatches</p>
               </div>
             </div>
 
             <div className="space-y-3">
-              <h2 className="text-[10px] font-black uppercase text-white tracking-widest">Transaction Record</h2>
+              <h2 className="text-[10px] font-black uppercase text-slate-800 tracking-widest">Transaction Record</h2>
               
-              <div className="bg-[#141620]/20 rounded-2xl border border-white/5 overflow-hidden">
+              <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="border-b border-white/10 bg-white/5 text-[9px] font-black text-text-secondary uppercase tracking-wider">
+                    <tr className="border-b border-slate-200 bg-slate-50 text-[9px] font-black text-text-secondary uppercase tracking-wider">
                       <th className="p-4">Transaction ID</th>
                       <th className="p-4">Date</th>
                       <th className="p-4">Service Type</th>
@@ -1344,26 +1509,26 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="text-xs font-semibold">
-                    <tr className="border-b border-white/5 hover:bg-white/5">
+                    <tr className="border-b border-slate-100 hover:bg-slate-50/50">
                       <td className="p-4 font-mono text-accent">ZAR-X49S382</td>
-                      <td className="p-4">May 19, 2026</td>
-                      <td className="p-4">Plumbing Repair</td>
-                      <td className="p-4">PKR 1,800</td>
-                      <td className="p-4"><span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded uppercase">Released</span></td>
+                      <td className="p-4 text-slate-600">May 19, 2026</td>
+                      <td className="p-4 text-slate-800 font-bold">Plumbing Repair</td>
+                      <td className="p-4 text-slate-900 font-black">PKR 1,800</td>
+                      <td className="p-4"><span className="text-[9px] font-black text-emerald-650 bg-emerald-50 px-2 py-0.5 rounded uppercase border border-emerald-200/40">Released</span></td>
                     </tr>
-                    <tr className="border-b border-white/5 hover:bg-white/5">
+                    <tr className="border-b border-slate-100 hover:bg-slate-50/50">
                       <td className="p-4 font-mono text-accent">ZAR-L93M271</td>
-                      <td className="p-4">May 18, 2026</td>
-                      <td className="p-4">Drain Unclogging</td>
-                      <td className="p-4">PKR 2,200</td>
-                      <td className="p-4"><span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded uppercase">Released</span></td>
+                      <td className="p-4 text-slate-600">May 18, 2026</td>
+                      <td className="p-4 text-slate-800 font-bold">Drain Unclogging</td>
+                      <td className="p-4 text-slate-900 font-black">PKR 2,200</td>
+                      <td className="p-4"><span className="text-[9px] font-black text-emerald-650 bg-emerald-50 px-2 py-0.5 rounded uppercase border border-emerald-200/40">Released</span></td>
                     </tr>
-                    <tr className="border-b border-white/5 hover:bg-white/5">
+                    <tr className="border-b border-slate-100 hover:bg-slate-50/50">
                       <td className="p-4 font-mono text-accent">ZAR-A04J985</td>
-                      <td className="p-4">May 15, 2026</td>
-                      <td className="p-4">Pipe Installation</td>
-                      <td className="p-4">PKR 3,500</td>
-                      <td className="p-4"><span className="text-[9px] font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded uppercase">Released</span></td>
+                      <td className="p-4 text-slate-600">May 15, 2026</td>
+                      <td className="p-4 text-slate-800 font-bold">Pipe Installation</td>
+                      <td className="p-4 text-slate-900 font-black">PKR 3,500</td>
+                      <td className="p-4"><span className="text-[9px] font-black text-emerald-650 bg-emerald-50 px-2 py-0.5 rounded uppercase border border-emerald-200/40">Released</span></td>
                     </tr>
                   </tbody>
                 </table>
@@ -1375,40 +1540,40 @@ export default function App() {
 
         {/* ================== ADMIN: ALL BOOKINGS TAB ================== */}
         {activeTab === 'admin-bookings' && user?.role === 'admin' && (
-          <div className="flex-1 p-4 md:p-8 bg-[#0a0b10] flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/5 pb-4">
+          <div className="flex-1 p-4 md:p-8 bg-bg-dark flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-200/40 pb-4">
               <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
                   Admin Control Board <span className="text-accent">/</span> Registry
                 </h1>
                 <p className="text-text-secondary text-sm font-medium uppercase tracking-widest text-[9px] mt-1">Platform Monitor Node</p>
               </div>
 
-              <div className="bg-[#141620] border border-white/10 px-4 py-2.5 rounded-2xl flex items-center gap-6">
+              <div className="bg-white border border-slate-200/80 px-4 py-2.5 rounded-2xl flex items-center gap-6 shadow-sm">
                 <div>
                   <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Active Jobs</span>
                   <p className="text-base font-black text-accent">{allBookings.filter(b => b.status === 'Pending' || b.status === 'Confirmed' || b.status === 'Processing').length}</p>
                 </div>
-                <div className="h-8 w-px bg-white/10" />
+                <div className="h-8 w-px bg-slate-200" />
                 <div>
                   <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Completions</span>
-                  <p className="text-base font-black text-white">{allBookings.filter(b => b.status === 'Completed').length}</p>
+                  <p className="text-base font-black text-slate-800">{allBookings.filter(b => b.status === 'Completed').length}</p>
                 </div>
               </div>
             </header>
 
             <div className="space-y-3">
-              <h2 className="text-[10px] font-black uppercase text-white tracking-widest">All System Transactions</h2>
+              <h2 className="text-[10px] font-black uppercase text-slate-800 tracking-widest">All System Transactions</h2>
 
               {allBookings.length === 0 ? (
-                <div className="py-20 text-center text-text-secondary bg-[#141620]/20 rounded-3xl border border-white/5">
+                <div className="py-20 text-center text-text-secondary bg-slate-100/50 rounded-3xl border border-slate-200/60">
                   <p className="font-bold text-xs uppercase tracking-widest">No transactions available on platform</p>
                 </div>
               ) : (
-                <div className="bg-[#141620]/20 rounded-2xl border border-white/5 overflow-hidden">
+                <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-sm">
                   <table className="w-full text-left border-collapse">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/5 text-[9px] font-black text-text-secondary uppercase tracking-wider">
+                      <tr className="border-b border-slate-200 bg-slate-50 text-[9px] font-black text-text-secondary uppercase tracking-wider">
                         <th className="p-4">Booking ID</th>
                         <th className="p-4">Timestamp</th>
                         <th className="p-4">Customer Contact</th>
@@ -1420,23 +1585,23 @@ export default function App() {
                     </thead>
                     <tbody className="text-xs font-semibold">
                       {allBookings.map((b: any) => (
-                        <tr key={b.id} className="border-b border-white/5 hover:bg-white/5">
+                        <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50/50">
                           <td className="p-4 font-mono text-accent">{b.id}</td>
                           <td className="p-4 text-[10px] text-text-secondary">{new Date(b.timestamp).toLocaleString()}</td>
-                          <td className="p-4">{b.customerContact}</td>
-                          <td className="p-4">{b.intent?.service || b.provider?.specialty}</td>
-                          <td className="p-4 font-bold text-white">{b.provider?.name || 'Unassigned'}</td>
+                          <td className="p-4 text-slate-700">{b.customerContact}</td>
+                          <td className="p-4 text-slate-800 font-bold">{b.intent?.service || b.provider?.specialty}</td>
+                          <td className="p-4 font-bold text-slate-900">{b.provider?.name || 'Unassigned'}</td>
                           <td className="p-4">
                             <span className={cn(
-                              "text-[8px] font-black px-2 py-0.5 rounded-full uppercase",
-                              b.status === 'Pending' ? "bg-amber-400/10 text-amber-400" :
-                              b.status === 'Confirmed' ? "bg-accent/10 text-accent" :
-                              b.status === 'Completed' ? "bg-emerald-500/10 text-emerald-400" : "bg-red-500/10 text-red-400"
+                              "text-[8px] font-black px-2 py-0.5 rounded-full uppercase border",
+                              b.status === 'Pending' ? "bg-amber-400/10 text-amber-600 border-amber-200/50" :
+                              b.status === 'Confirmed' ? "bg-accent/10 text-accent border-accent/20" :
+                              b.status === 'Completed' ? "bg-emerald-500/10 text-emerald-600 border-emerald-200/50" : "bg-red-500/10 text-red-600 border-red-200/50"
                             )}>
                               {b.status}
                             </span>
                           </td>
-                          <td className="p-4 text-right font-black text-white">PKR {b.provider?.pricing?.total || 0}</td>
+                          <td className="p-4 text-right font-black text-slate-900">PKR {b.provider?.pricing?.total || 0}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1446,57 +1611,199 @@ export default function App() {
             </div>
           </div>
         )}
-
-        {/* ================== ADMIN: USER DIRECTORY TAB ================== */}
+             {/* ================== ADMIN: USER DIRECTORY TAB ================== */}
         {activeTab === 'admin-users' && user?.role === 'admin' && (
-          <div className="flex-1 p-4 md:p-8 bg-[#0a0b10] flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
-            <header className="border-b border-white/5 pb-4">
-              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-white flex items-center gap-2">
+          <div className="flex-1 p-4 md:p-8 bg-bg-dark flex flex-col gap-6 overflow-y-auto pb-24 md:pb-8">
+            <header className="border-b border-slate-200/40 pb-4">
+              <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
                 User Management Directory
               </h1>
               <p className="text-text-secondary text-sm font-medium uppercase tracking-widest text-[9px] mt-1">Platform Account Node Index</p>
             </header>
 
-            <div className="space-y-4">
-              <h2 className="text-[10px] font-black uppercase text-white tracking-widest">Registered User Nodes</h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {registeredUsers.map((u) => (
-                  <div key={u.id} className="bg-[#141620]/40 border border-white/5 p-5 rounded-2xl flex items-center justify-between gap-4">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center font-black text-lg text-accent">
-                        {u.name.charAt(0)}
-                      </div>
-                      <div>
-                        <h4 className="font-bold text-white text-base leading-tight">{u.name}</h4>
-                        <p className="text-xs text-text-secondary mt-1">{u.email}</p>
-                        <p className="text-[9px] font-mono text-slate-500 mt-1 uppercase">ID: {u.id}</p>
-                      </div>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Provision Form */}
+              <div className="lg:col-span-1">
+                <div className="bg-white/80 border border-slate-200/80 rounded-[28px] p-6 shadow-xl backdrop-blur-md sticky top-6">
+                  <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4">Provision New Account Node</h2>
+                  <form onSubmit={handleAdminProvisionSubmit} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Full Name</label>
+                      <input 
+                        type="text"
+                        value={provName}
+                        onChange={(e) => setProvName(e.target.value)}
+                        placeholder="e.g. Raza Abbas"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
+                      />
                     </div>
 
-                    <div className="text-right">
-                      <span className={cn(
-                        "text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider",
-                        u.role === 'customer' ? "bg-blue-500/10 text-blue-400" :
-                        u.role === 'provider' ? "bg-accent/10 text-accent" : "bg-purple-500/10 text-purple-400"
-                      )}>
-                        {u.role}
-                      </span>
-                      {u.specialty && (
-                        <p className="text-[9px] text-text-secondary mt-2 font-bold uppercase tracking-tighter bg-white/5 px-2 py-0.5 rounded-lg inline-block">
-                          {u.specialty}
-                        </p>
-                      )}
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Email Address</label>
+                      <input 
+                        type="email"
+                        value={provEmail}
+                        onChange={(e) => setProvEmail(e.target.value)}
+                        placeholder="e.g. raza@zariya.pk"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
+                      />
                     </div>
-                  </div>
-                ))}
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Password</label>
+                      <input 
+                        type="password"
+                        value={provPassword}
+                        onChange={(e) => setProvPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all placeholder-slate-400"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Account Role</label>
+                      <select 
+                        value={provRole}
+                        onChange={(e) => setProvRole(e.target.value as any)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                      >
+                        <option value="customer">Customer (Find Services)</option>
+                        <option value="provider">Provider (Fulfill Services)</option>
+                        <option value="admin">Admin (Manage Platform)</option>
+                      </select>
+                    </div>
+
+                    {provRole === 'provider' && (
+                      <div className="space-y-1.5">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-2">Specialty Focus</label>
+                        <select 
+                          value={provSpecialty}
+                          onChange={(e) => setProvSpecialty(e.target.value)}
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs font-semibold text-slate-800 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent transition-all"
+                        >
+                          <option value="Plumber">Plumbing Expert</option>
+                          <option value="Electrician">Electrical Specialist</option>
+                          <option value="Carpenter">Carpentry Node</option>
+                          <option value="AC Repair">AC Climate Systems</option>
+                        </select>
+                      </div>
+                    )}
+
+                    {provError && <p className="text-red-500 text-xs font-bold pl-2 pt-1">{provError}</p>}
+                    {provSuccess && <p className="text-emerald-650 text-xs font-bold pl-2 pt-1">{provSuccess}</p>}
+
+                    <button 
+                      type="submit"
+                      disabled={isProvisioning}
+                      className="w-full bg-accent text-white font-bold text-xs tracking-widest py-3 rounded-xl hover:scale-[1.02] active:scale-95 transition-all shadow-md shadow-accent/25 mt-4 cursor-pointer disabled:opacity-50"
+                    >
+                      {isProvisioning ? 'PROVISIONING...' : 'PROVISION ACCOUNT NODE'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+
+              {/* Registered Users List */}
+              <div className="lg:col-span-2 space-y-4">
+                <h2 className="text-[10px] font-black uppercase text-slate-800 tracking-widest">Registered User Nodes</h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+                  {registeredUsers.map((u) => (
+                    <div key={u.id} className="bg-white border border-slate-200/80 p-5 rounded-2xl flex items-center justify-between gap-4 shadow-sm hover:shadow-md transition-all">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-slate-100 border border-slate-200/60 rounded-2xl flex items-center justify-center font-black text-lg text-accent">
+                          {u.name ? u.name.charAt(0) : 'U'}
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-slate-800 text-base leading-tight">{u.name}</h4>
+                          <p className="text-xs text-text-secondary mt-1">{u.email}</p>
+                          <p className="text-[9px] font-mono text-slate-500 mt-1 uppercase font-bold">ID: {u.id}</p>
+                        </div>
+                      </div>
+
+                      <div className="text-right">
+                        <span className={cn(
+                          "text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border",
+                          u.role === 'customer' ? "bg-blue-500/10 text-blue-650 border-blue-200/50" :
+                          u.role === 'provider' ? "bg-accent/10 text-accent border-accent/20" : "bg-purple-500/10 text-purple-650 border-purple-200/50"
+                        )}>
+                          {u.role}
+                        </span>
+                        {u.specialty && (
+                          <p className="text-[9px] text-text-secondary mt-2 font-bold uppercase tracking-tighter bg-slate-100 border border-slate-200/60 px-2 py-0.5 rounded-lg inline-block">
+                            {u.specialty}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
         )}
 
+        {/* Developer & System Views Tabs */}
+        {activeTab === 'agent-nodes' && user?.role === 'admin' && (
+          <div className="flex-1 p-4 md:p-6 flex flex-col overflow-hidden pb-28 md:pb-6">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
+              <div>
+                <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+                  <Cpu className="w-4 h-4 text-accent animate-pulse" />
+                  Autonomous Neural Node Network
+                </h2>
+                <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-0.5">
+                  Visualizing multi-agent execution paths and node states
+                </p>
+              </div>
+            </div>
+            <div className="flex-1 bg-black/45 border border-white/5 rounded-3xl p-6 relative overflow-hidden shadow-inner">
+              <AgentNodeGraph currentAgent={state.currentAgent} timeline={state.timeline} />
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'transactions' && user?.role === 'admin' && (
+          <TransactionsPanel history={state.history} />
+        )}
+
+        {activeTab === 'parameters' && user?.role === 'admin' && (
+          <ParametersPanel />
+        )}
+
+        {activeTab === 'trust-matrix' && user?.role === 'admin' && (
+          <TrustMatrixPanel providers={state.providers} />
+        )}
+
+        {activeTab === 'ai-analytics' && user?.role === 'admin' && (
+          <AiAnalyticsPanel history={state.history} />
+        )}
+
+        {activeTab === 'system-health' && user?.role === 'admin' && (
+          <SystemHealthPanel />
+        )}
+
+        {activeTab === 'live-streams' && user?.role === 'admin' && (
+          <div className="flex-1 p-4 md:p-6 flex flex-col overflow-hidden pb-28 md:pb-6">
+            <div className="flex items-center justify-between border-b border-white/5 pb-4 mb-4">
+              <div>
+                <h2 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-accent animate-pulse" />
+                  Telemetry Signals Stream
+                </h2>
+                <p className="text-[10px] text-text-secondary uppercase tracking-widest mt-0.5">
+                  Real-time pipeline diagnostics logs and agent thought patterns
+                </p>
+              </div>
+            </div>
+            <div className="flex-1 bg-black/35 border border-white/5 rounded-3xl p-6 overflow-hidden flex flex-col shadow-inner">
+              <AntigravityStream logs={state.logs} isProcessing={state.isProcessing} timeline={state.timeline} />
+            </div>
+          </div>
+        )}
+
         {/* Mobile Navbar (Visible only on small screens) */}
-        <nav className="md:hidden fixed bottom-6 left-6 right-6 h-16 bg-[#0f111a]/90 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-[2000] flex items-center justify-around px-2">
+        <nav className="md:hidden fixed bottom-6 left-6 right-6 h-16 bg-white/90 backdrop-blur-xl border border-slate-200/80 rounded-2xl shadow-2xl z-[2000] flex items-center justify-around px-2">
           {user?.role === 'customer' && (
             <>
               <MobileNavItem 
@@ -1548,7 +1855,7 @@ export default function App() {
             </>
           )}
 
-          <button onClick={handleLogout} className="w-10 h-10 bg-white/5 rounded-xl flex items-center justify-center text-text-secondary hover:text-white">
+          <button onClick={handleLogout} className="w-10 h-10 bg-slate-100 hover:bg-red-50 text-slate-500 hover:text-red-605 border border-slate-200/60 rounded-xl flex items-center justify-center transition-colors">
             <LogOut className="w-5 h-5" />
           </button>
         </nav>
@@ -1567,25 +1874,25 @@ export default function App() {
                 initial={{ scale: 0.95, y: 20 }}
                 animate={{ scale: 1, y: 0 }}
                 exit={{ scale: 0.95, y: 20 }}
-                className="bg-[#141620] border border-white/10 w-full max-w-lg rounded-[28px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+                className="bg-white border border-slate-200/80 w-full max-w-lg rounded-[28px] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
               >
                 {/* Header */}
-                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-black/30">
+                <div className="p-6 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/80">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center text-black font-black text-xl">
+                    <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center text-white font-black text-xl">
                       {detailProvider.name.charAt(0)}
                     </div>
                     <div>
-                      <h3 className="text-lg font-black text-white leading-tight">{detailProvider.name}</h3>
+                      <h3 className="text-lg font-black text-slate-900 leading-tight">{detailProvider.name}</h3>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] font-bold text-text-secondary bg-white/5 px-2 py-0.5 rounded uppercase">{detailProvider.specialty}</span>
+                        <span className="text-[10px] font-bold text-text-secondary bg-slate-100 border border-slate-200/50 px-2 py-0.5 rounded uppercase">{detailProvider.specialty}</span>
                         <span className="text-[10px] font-black text-accent">{detailProvider.rating} ★</span>
                       </div>
                     </div>
                   </div>
                   <button 
                     onClick={() => setDetailProvider(null)}
-                    className="text-text-secondary hover:text-white font-bold text-xs bg-white/5 border border-white/5 px-3 py-1.5 rounded-lg transition-colors"
+                    className="text-slate-500 hover:text-slate-900 font-bold text-xs bg-slate-100 hover:bg-slate-200/60 border border-slate-200/60 px-3 py-1.5 rounded-lg transition-colors"
                   >
                     CLOSE
                   </button>
@@ -1597,35 +1904,35 @@ export default function App() {
                   <div className="space-y-2">
                     <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Recent Node Work Gallery</p>
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="aspect-square bg-black/50 border border-white/5 rounded-xl flex items-center justify-center text-[10px] text-slate-700 font-bold uppercase select-none">
+                      <div className="aspect-square bg-slate-50 border border-slate-200/65 rounded-xl flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase select-none">
                         📷 job_01.png
                       </div>
-                      <div className="aspect-square bg-black/50 border border-white/5 rounded-xl flex items-center justify-center text-[10px] text-slate-700 font-bold uppercase select-none">
+                      <div className="aspect-square bg-slate-50 border border-slate-200/65 rounded-xl flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase select-none">
                         📷 job_02.png
                       </div>
-                      <div className="aspect-square bg-black/50 border border-white/5 rounded-xl flex items-center justify-center text-[10px] text-slate-700 font-bold uppercase select-none">
+                      <div className="aspect-square bg-slate-50 border border-slate-200/65 rounded-xl flex items-center justify-center text-[10px] text-slate-400 font-bold uppercase select-none">
                         📷 job_03.png
                       </div>
                     </div>
                   </div>
 
                   {/* Trust Metrics */}
-                  <div className="bg-black/30 p-4 rounded-xl border border-white/5 grid grid-cols-2 gap-4">
+                  <div className="bg-slate-50/80 p-4 rounded-xl border border-slate-200/60 grid grid-cols-2 gap-4">
                     <div>
                       <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Bayesian Trust Score</span>
                       <p className="text-xl font-black text-accent mt-0.5">{(detailProvider.trustScore * 100).toFixed(1)}%</p>
                     </div>
                     <div>
                       <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Reliability Index</span>
-                      <p className="text-base font-bold text-white mt-0.5">{detailProvider.metrics.reliability}</p>
+                      <p className="text-base font-bold text-slate-800 mt-0.5">{detailProvider.metrics.reliability}</p>
                     </div>
                     <div>
                       <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Consistency Rating</span>
-                      <p className="text-base font-bold text-white mt-0.5">{detailProvider.metrics.consistency}</p>
+                      <p className="text-base font-bold text-slate-800 mt-0.5">{detailProvider.metrics.consistency}</p>
                     </div>
                     <div>
                       <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Response rate</span>
-                      <p className="text-base font-bold text-white mt-0.5">{detailProvider.metrics.responseRate}</p>
+                      <p className="text-base font-bold text-slate-800 mt-0.5">{detailProvider.metrics.responseRate}</p>
                     </div>
                   </div>
 
@@ -1634,30 +1941,30 @@ export default function App() {
                     <p className="text-[9px] font-black text-text-secondary uppercase tracking-widest">Vouched Customer Reviews</p>
                     
                     <div className="space-y-2.5">
-                      <div className="bg-white/5 border border-white/5 rounded-xl p-3.5 space-y-1.5">
+                      <div className="bg-slate-50/50 border border-slate-200/65 rounded-xl p-3.5 space-y-1.5">
                         <div className="flex justify-between items-center text-[10px] font-bold">
-                          <span className="text-white">Kamran Lodhi</span>
+                          <span className="text-slate-800">Kamran Lodhi</span>
                           <span className="text-accent">5.0 ★</span>
                         </div>
-                        <p className="text-xs text-text-primary leading-normal italic">"Zabardast kaam kiya. Time par aae aur bohot tameez se pesh aae. Highly recommended!"</p>
+                        <p className="text-xs text-text-secondary leading-normal italic">"Zabardast kaam kiya. Time par aae aur bohot tameez se pesh aae. Highly recommended!"</p>
                       </div>
 
-                      <div className="bg-white/5 border border-white/5 rounded-xl p-3.5 space-y-1.5">
+                      <div className="bg-slate-50/50 border border-slate-200/65 rounded-xl p-3.5 space-y-1.5">
                         <div className="flex justify-between items-center text-[10px] font-bold">
-                          <span className="text-white">Zainab Bibi</span>
+                          <span className="text-slate-800">Zainab Bibi</span>
                           <span className="text-accent">4.5 ★</span>
                         </div>
-                        <p className="text-xs text-text-primary leading-normal italic">"Kaam bohot jald khatam kiya aur rates bhi bilkul theek hain."</p>
+                        <p className="text-xs text-text-secondary leading-normal italic">"Kaam bohot jald khatam kiya aur rates bhi bilkul theek hain."</p>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 {/* Footer dispatch action */}
-                <div className="p-5 border-t border-white/5 bg-black/40 flex items-center justify-between">
+                <div className="p-5 border-t border-slate-200/80 bg-slate-50/80 flex items-center justify-between">
                   <div>
                     <span className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Estimated cost</span>
-                    <p className="text-lg font-black text-white">PKR {detailProvider.pricing.total}</p>
+                    <p className="text-lg font-black text-slate-900">PKR {detailProvider.pricing.total}</p>
                   </div>
                   <button 
                     onClick={() => {
@@ -1665,7 +1972,7 @@ export default function App() {
                       setDetailProvider(null);
                       orchestrator.current?.proceedToForm(detailProvider);
                     }}
-                    className="bg-accent text-black font-black text-xs px-6 py-3 rounded-xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-accent/25 tracking-widest"
+                    className="bg-accent text-white font-black text-xs px-6 py-3 rounded-xl hover:scale-105 active:scale-95 transition-all shadow-xl shadow-accent/25 tracking-widest"
                   >
                     DISPATCH AGENT NODE
                   </button>
@@ -1683,40 +1990,40 @@ export default function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[3000] flex items-center justify-center p-6"
+              className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[3000] flex items-center justify-center p-6 overflow-y-auto py-8"
              >
                 <motion.div 
                   initial={{ scale: 0.9, y: 20 }}
                   animate={{ scale: 1, y: 0 }}
-                  className="bg-[#141620] border border-white/10 w-full max-w-md rounded-[32px] shadow-2xl overflow-hidden flex flex-col"
+                  className="bg-white border border-slate-200/80 w-full max-w-md rounded-[32px] shadow-2xl overflow-y-auto max-h-[90vh] flex flex-col"
                 >
                   <div className="p-6 md:p-8 space-y-6">
                     <div className="flex items-center justify-between">
-                      <h2 className="text-xl md:text-2xl font-black tracking-tight text-white flex items-center gap-2">
+                      <h2 className="text-xl md:text-2xl font-black tracking-tight text-slate-900 flex items-center gap-2">
                         <Clock className="w-5 h-5 text-accent" /> Schedule & Verify
                       </h2>
                       <button 
                         onClick={() => setState(s => ({ ...s, bookingStage: 'selection', isAwaitingSelection: true, selectedProvider: null }))}
-                        className="text-text-secondary hover:text-accent font-bold text-[10px] uppercase tracking-widest transition-colors bg-white/5 px-2.5 py-1 rounded"
+                        className="text-slate-500 hover:text-accent font-bold text-[10px] uppercase tracking-widest transition-colors bg-slate-105 border border-slate-200/50 px-2.5 py-1 rounded"
                       >
                         BACK
                       </button>
                     </div>
 
-                    <div className="bg-black/40 border border-white/5 p-4 rounded-2xl space-y-3">
+                    <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl space-y-3">
                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-black text-base font-black">
+                          <div className="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white text-base font-black">
                             {state.selectedProvider?.name.charAt(0)}
                           </div>
                           <div>
                             <p className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Assigned Specialist</p>
-                            <h4 className="text-sm font-bold text-white leading-tight">{state.selectedProvider?.name}</h4>
+                            <h4 className="text-sm font-bold text-slate-950 leading-tight">{state.selectedProvider?.name}</h4>
                           </div>
                        </div>
-                       <div className="grid grid-cols-2 gap-4 pt-3 border-t border-white/5">
+                       <div className="grid grid-cols-2 gap-4 pt-3 border-t border-slate-200/60">
                           <div>
                              <p className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Estimated Fee</p>
-                             <p className="text-sm font-black text-white">PKR {state.selectedProvider?.pricing.total}</p>
+                             <p className="text-sm font-black text-slate-900">PKR {state.selectedProvider?.pricing.total}</p>
                           </div>
                           <div>
                              <p className="text-[8px] font-black text-text-secondary uppercase tracking-widest">Distance ETA</p>
@@ -1732,7 +2039,7 @@ export default function App() {
                         type="datetime-local"
                         value={dateInput}
                         onChange={(e) => setDateInput(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 rounded-xl py-3 px-4 text-sm font-semibold text-white focus:outline-none focus:border-accent transition-all"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 text-sm font-semibold text-slate-800 focus:outline-none focus:border-accent focus:bg-white transition-all"
                       />
                     </div>
 
@@ -1746,7 +2053,7 @@ export default function App() {
                           value={contactInput}
                           onChange={(e) => setContactInput(e.target.value)}
                           placeholder="03XX-XXXXXXX"
-                          className="w-full bg-black/40 border border-white/10 rounded-xl py-3 pl-11 pr-4 text-sm font-semibold text-white focus:outline-none focus:border-accent transition-all font-mono"
+                          className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-11 pr-4 text-sm font-semibold text-slate-800 focus:outline-none focus:border-accent focus:bg-white transition-all font-mono"
                         />
                       </div>
                     </div>
@@ -1754,7 +2061,7 @@ export default function App() {
                     <button 
                       onClick={handleFinalDispatch}
                       disabled={!contactInput.trim() || state.isProcessing}
-                      className="w-full bg-accent text-black py-3.5 rounded-xl font-black text-xs tracking-wider shadow-2xl shadow-accent/25 hover:scale-[1.02] active:scale-95 transition-all disabled:opacity-50"
+                      className="w-full bg-accent text-white py-3.5 rounded-xl font-black text-xs tracking-wider shadow-2xl shadow-accent/25 hover:scale-[1.02] hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
                     >
                       {state.isProcessing ? 'CONFIRMING NODE DISPATCH...' : 'CONFIRM SERVICE PROTOCOL'}
                     </button>
@@ -1769,13 +2076,13 @@ export default function App() {
                initial={{ opacity: 0 }}
                animate={{ opacity: 1 }}
                exit={{ opacity: 0 }}
-               className="absolute inset-0 bg-[#00f2ff] z-[3000] flex items-center justify-center p-6 text-black"
+               className="absolute inset-0 bg-accent z-[3000] flex items-center justify-center p-6 text-white"
              >
                 <div className="max-w-md w-full text-center space-y-6 md:space-y-8">
                    <motion.div 
                     initial={{ scale: 0.5, rotate: -20 }}
                     animate={{ scale: 1, rotate: 0 }}
-                    className="w-20 h-20 bg-black rounded-[28px] shadow-2xl flex items-center justify-center mx-auto relative overflow-hidden"
+                    className="w-20 h-20 bg-white rounded-[28px] shadow-2xl flex items-center justify-center mx-auto relative overflow-hidden"
                    >
                      <CheckCircle2 className="w-10 h-10 text-accent" />
                      <motion.div 
@@ -1786,31 +2093,31 @@ export default function App() {
                    </motion.div>
 
                    <div className="space-y-3 px-4">
-                      <h2 className="text-3xl font-black tracking-tight text-black">DISPATCHED</h2>
-                      <div className="inline-flex items-center gap-1.5 bg-black/10 px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider mb-2">
-                        <ShieldCheck className="w-4 h-4 text-black" />
+                      <h2 className="text-3xl font-black tracking-tight text-white">DISPATCHED</h2>
+                      <div className="inline-flex items-center gap-1.5 bg-white/10 px-3.5 py-1 rounded-full text-[9px] font-black uppercase tracking-wider mb-2 border border-white/10">
+                        <ShieldCheck className="w-4 h-4 text-white" />
                         Status: Active Dispatch
                       </div>
-                      <p className="text-black/85 font-semibold text-sm leading-relaxed">Assigned service provider has been booked and is currently navigating to your location. A confirmation email with details has been sent to you.</p>
-                      <div className="text-[10px] font-mono opacity-65 bg-black/10 px-3 py-1 rounded-lg inline-block">ID: {state.bookingId}</div>
+                      <p className="text-white/85 font-semibold text-sm leading-relaxed">Assigned service provider has been booked and is currently navigating to your location. A confirmation email with details has been sent to you.</p>
+                      <div className="text-[10px] font-mono opacity-65 bg-white/10 px-3 py-1 rounded-lg inline-block text-white/90">ID: {state.bookingId}</div>
                    </div>
 
-                   <div className="bg-black/10 rounded-2xl p-5 border border-black/5 space-y-3.5 mx-4">
+                   <div className="bg-white/10 rounded-2xl p-5 border border-white/10 space-y-3.5 mx-4">
                       <div className="flex items-center gap-4 text-left">
-                        <div className="p-3 bg-black/10 rounded-xl">
+                        <div className="p-3 bg-white/10 rounded-xl text-white">
                           <Timer className="w-6 h-6" />
                         </div>
                         <div>
-                          <p className="text-[8px] font-black text-black/60 uppercase tracking-widest">Estimated Arrival ETA</p>
-                          <p className="text-xl font-black">{state.selectedProvider?.eta}</p>
+                          <p className="text-[8px] font-black text-white/70 uppercase tracking-widest">Estimated Arrival ETA</p>
+                          <p className="text-xl font-black text-white">{state.selectedProvider?.eta}</p>
                         </div>
                       </div>
-                      <div className="h-px bg-black/10" />
-                       <div className="flex items-center gap-2 text-xs font-bold text-black/85">
-                          <span className="w-2 h-2 bg-black rounded-full animate-ping" />
+                      <div className="h-px bg-white/15" />
+                       <div className="flex items-center gap-2 text-xs font-bold text-white">
+                          <span className="w-2 h-2 bg-white rounded-full animate-ping" />
                           Destination: {state.intent?.location}
                        </div>
-                       <div className="flex items-center gap-2 text-xs font-bold text-black/60 pt-1.5 border-t border-black/5">
+                       <div className="flex items-center gap-2 text-xs font-bold text-white/75 pt-1.5 border-t border-white/10">
                           <ShieldCheck className="w-4 h-4" />
                           Heartbeat GPS verification active
                        </div>
@@ -1818,7 +2125,7 @@ export default function App() {
 
                    <button 
                     onClick={() => setState(s => ({ ...s, bookingStage: 'idle', selectedProvider: null, providers: [], intent: null, bookingId: null, isProcessing: false }))}
-                    className="w-[90%] bg-black text-accent py-4 rounded-xl font-black text-xs tracking-wider shadow-2xl hover:scale-[1.02] active:scale-95 transition-all mx-auto"
+                    className="w-[90%] bg-white text-accent hover:bg-slate-100 py-4 rounded-xl font-black text-xs tracking-wider shadow-2xl hover:scale-[1.02] active:scale-95 transition-all mx-auto font-sans"
                   >
                     BACK TO COMMAND CENTER
                   </button>

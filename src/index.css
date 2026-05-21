@@ -1,44 +1,100 @@
-@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap');
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
   
-  --color-accent: #00f2ff;
-  --color-accent-glow: rgba(0, 242, 255, 0.2);
-  --color-bg-dark: #0a0b10;
-  --color-card-bg: rgba(20, 22, 32, 0.7);
-  --color-text-primary: #e0e0e0;
-  --color-text-secondary: #94a3b8;
-  --color-border: rgba(255, 255, 255, 0.1);
+  /* Futuristic Deep Royal Purple Brand Identity */
+  --color-accent: #5503A5;
+  --color-accent-glow: rgba(85, 3, 165, 0.15);
+  
+  --color-purple-accent: #7c3aed;
+  --color-purple-glow: rgba(124, 58, 237, 0.12);
+  
+  --color-cyber-pink: #db2777;
+  --color-cyber-pink-glow: rgba(219, 39, 119, 0.1);
+
+  --color-success-neon: #059669;
+  --color-success-glow: rgba(5, 150, 105, 0.1);
+
+  /* Premium Light Theme Colors */
+  --color-bg-dark: #f8fafc;
+  --color-deep-navy: #ffffff;
+  --color-card-bg: rgba(255, 255, 255, 0.8);
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-border: rgba(148, 163, 184, 0.16);
 }
 
 @layer base {
   body {
-    @apply bg-bg-dark text-text-primary antialiased;
+    @apply bg-bg-dark text-text-primary antialiased selection:bg-accent selection:text-white;
+    font-family: var(--font-sans);
   }
 
-  /* Custom Scrollbar */
+  /* Futuristic Elegant Custom Scrollbar */
   ::-webkit-scrollbar {
     width: 6px;
+    height: 6px;
   }
   ::-webkit-scrollbar-track {
-    background: transparent;
+    background: rgba(241, 245, 249, 0.5);
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-border rounded-full hover:bg-slate-800;
+    background: rgba(148, 163, 184, 0.3);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent);
+    box-shadow: 0 0 8px var(--color-accent-glow);
   }
 }
 
-.glow-text {
-  text-shadow: 0 0 10px var(--color-accent-glow);
+/* Elegant Light Neon Typography Glows */
+.glow-text-cyan {
+  text-shadow: 0 0 10px var(--color-accent-glow), 0 0 1px var(--color-accent);
 }
 
-.glow-border {
-  box-shadow: 0 0 15px var(--color-accent-glow);
+.glow-text-purple {
+  text-shadow: 0 0 10px var(--color-purple-glow), 0 0 1px var(--color-purple-accent);
 }
 
+.glow-text-green {
+  text-shadow: 0 0 10px var(--color-success-glow), 0 0 1px var(--color-success-neon);
+}
+
+/* Glowing Border System for Lighter Surfaces */
+.glow-border-cyan {
+  box-shadow: 0 0 15px rgba(85, 3, 165, 0.05), inset 0 0 10px rgba(85, 3, 165, 0.02);
+  border-color: rgba(85, 3, 165, 0.25);
+}
+
+.glow-border-purple {
+  box-shadow: 0 0 15px rgba(124, 58, 237, 0.05), inset 0 0 10px rgba(124, 58, 237, 0.02);
+  border-color: rgba(124, 58, 237, 0.25);
+}
+
+/* Glassmorphism Premium Light Cyber Card */
+.cyber-panel {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.85) 100%);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
+.cyber-panel-glow {
+  box-shadow: 0 8px 32px 0 rgba(148, 163, 184, 0.12), 0 0 1px 1px rgba(255, 255, 255, 0.8) inset;
+}
+
+/* Hexagon background pattern adapted for white screens */
+.cyber-grid {
+  background-size: 30px 30px;
+  background-image: 
+    linear-gradient(to right, rgba(85, 3, 165, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(85, 3, 165, 0.03) 1px, transparent 1px);
+}
+
+/* Scanline Overlay Animation */
 @keyframes scanline {
   0% { transform: translateY(-100%); }
   100% { transform: translateY(100%); }
@@ -51,8 +107,49 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background: linear-gradient(to bottom, transparent 0%, rgba(0, 242, 255, 0.05) 50%, transparent 100%);
-  animation: scanline 8s linear infinite;
+  background: linear-gradient(to bottom, transparent 0%, rgba(85, 3, 165, 0.015) 50%, transparent 100%);
+  animation: scanline 16s linear infinite;
   pointer-events: none;
+  z-index: 10;
 }
 
+/* Ripple Pulse Animation */
+@keyframes map-ripple {
+  0% {
+    transform: scale(0.5);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(3.5);
+    opacity: 0;
+  }
+}
+
+.animate-ripple {
+  animation: map-ripple 2.5s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+/* Typing text cursor caret */
+.cursor-caret::after {
+  content: "|";
+  animation: blink 0.8s infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+/* Pulse Glow Keyframe */
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px var(--color-accent-glow), 0 0 2px rgba(85, 3, 165, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 16px rgba(85, 3, 165, 0.25), 0 0 4px rgba(85, 3, 165, 0.5);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2.5s infinite ease-in-out;
+}

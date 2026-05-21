@@ -24,14 +24,15 @@ COPY package*.json ./
 RUN npm ci --only=production
 
 # Copy backend files and built frontend assets
-COPY server.js models.js ./
+COPY server/ ./server/
 COPY --from=builder /usr/src/app/dist ./dist
 
 # Keep db files local in runtime volume or directory fallback
-RUN echo "[]" > bookings.json && \
-    echo "[]" > users.json && \
-    echo "{}" > sessions.json
+RUN mkdir -p server/data && \
+    echo "[]" > server/data/bookings.json && \
+    echo "[]" > server/data/users.json && \
+    echo "{}" > server/data/sessions.json
 
 EXPOSE 3001
 
-CMD ["node", "server.js"]
+CMD ["node", "server/server.js"]

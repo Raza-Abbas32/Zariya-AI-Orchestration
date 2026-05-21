@@ -10,6 +10,7 @@ import {
 } from "./agents";
 import { OrchestrationState, AgentLog, Intent, Provider, ChatMessage } from "../types";
 import { NotificationService } from "./notifications";
+import * as Logger from "../lib/logger";
 
 export class ZariyaOrchestrator {
   private state: OrchestrationState;
@@ -28,6 +29,7 @@ export class ZariyaOrchestrator {
   constructor(initialState: OrchestrationState, setState: (state: OrchestrationState) => void) {
     this.state = initialState;
     this.setState = setState;
+    Logger.info('Orchestrator', '🚀 ZariyaOrchestrator initialized');
   }
 
   private updateState(patch: Partial<OrchestrationState>) {
@@ -175,7 +177,7 @@ export class ZariyaOrchestrator {
       
       if (providers.length > 0 && !this.state.userLocation) {
         // Fallback userLocation to first provider's general zone if user coordinates are not loaded
-        this.updateState({ userLocation: { lat: providers[0].location.lat, lng: providers[0].location.lng } });
+        this.updateState({ userLocation: providers[0].location });
       }
 
       this.updateState({ providers });
