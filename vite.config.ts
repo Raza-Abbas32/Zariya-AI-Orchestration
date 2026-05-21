@@ -18,7 +18,12 @@ export default defineConfig(({ mode }) => {
         output: {
           manualChunks(id) {
             if (id.includes('node_modules')) {
-              if (id.includes('react-dom') || id.includes('/react/')) {
+              if (
+                id.includes('/node_modules/react/') ||
+                id.includes('/node_modules/react-dom/') ||
+                id.includes('/node_modules/scheduler/') ||
+                id.includes('/node_modules/use-sync-external-store/')
+              ) {
                 return 'vendor-react';
               }
               if (id.includes('leaflet')) {
