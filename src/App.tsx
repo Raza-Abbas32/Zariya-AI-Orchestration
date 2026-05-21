@@ -23,7 +23,6 @@ import {
   X,
   Clock,
   Phone,
-  Sparkles,
   Menu,
   Network,
   Receipt,
@@ -1089,13 +1088,13 @@ export default function App() {
         
         {/* ================== CUSTOMER: DASHBOARD TAB ================== */}
         {activeTab === 'dashboard' && user?.role === 'customer' && (
-          <div className="flex-1 flex flex-col p-4 md:p-8 gap-4 md:gap-6 overflow-y-auto pb-24 md:pb-8">
-            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2">
+          <div className="flex-1 flex flex-col p-4 md:p-8 gap-4 md:gap-6 overflow-y-auto pb-24 md:pb-8 bg-slate-50 text-slate-900">
+            <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-2 bg-white/90 border border-slate-200/80 rounded-[28px] p-4 md:p-5 shadow-sm backdrop-blur-md">
               <div>
-                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900 flex items-center gap-2">
-                  Mission Control <Sparkles className="w-5 h-5 text-accent" />
+                <h1 className="text-2xl md:text-3xl font-black tracking-tight text-slate-900">
+                  Mission Control
                 </h1>
-                <p className="text-text-secondary text-sm font-medium">Autonomous Service Orchestration Node</p>
+                <p className="text-slate-500 text-sm font-medium">Autonomous Service Orchestration Node</p>
               </div>
               
               <div className="flex w-full md:w-auto bg-white border border-slate-200/80 p-1 rounded-2xl shadow-sm">
@@ -1349,7 +1348,7 @@ export default function App() {
                         initial={{ opacity: 0, y: 50 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 50 }}
-                        className="absolute bottom-4 left-4 right-4 bg-white/95 backdrop-blur-xl border border-slate-200/80 p-4 rounded-2xl shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 z-[999]"
+                        className="mt-4 w-full bg-white/95 backdrop-blur-xl border border-slate-200/80 p-4 rounded-2xl shadow-lg md:shadow-2xl flex flex-col sm:flex-row items-center justify-between gap-4 md:absolute md:bottom-4 md:left-4 md:right-4 md:z-[999]"
                       >
                         <div className="flex items-center gap-3 w-full sm:w-auto">
                           <div className="w-12 h-12 bg-accent rounded-xl flex items-center justify-center text-white text-xl font-black shadow-lg shadow-accent/20">
