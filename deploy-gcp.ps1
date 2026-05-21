@@ -1,9 +1,9 @@
 # ============================================================
 # Zariya AI Portal — GCP Cloud Run Deployment Script
-# Project: Sagheer-321 | Email: mjan8066m@gmail.com
+# Project: AISeekhoProject | Email: shahnazmemon50@gmail.com
 # ============================================================
 
-$PROJECT_ID = "Sagheer-321"
+$PROJECT_ID = "AISeekhoProject"
 $REGION = "asia-south1"           # Mumbai — closest to Pakistan
 $SERVICE_NAME = "zariya-ai-portal"
 $IMAGE_NAME = "gcr.io/$PROJECT_ID/$SERVICE_NAME"
@@ -17,13 +17,13 @@ Write-Host "=========================================" -ForegroundColor Cyan
 Write-Host ""
 
 # 1. Authenticate
-Write-Host "[1/6] Authenticating with Google Cloud..." -ForegroundColor Yellow
-& gcloud auth login --account mjan8066m@gmail.com
+Write-Host "[1/6] Authenticating with Google Cloud account shahnazmemon50@gmail.com..." -ForegroundColor Yellow
+& gcloud auth login --account shahnazmemon50@gmail.com
 
 # 2. Set project
 Write-Host "[2/6] Setting active project to $PROJECT_ID..." -ForegroundColor Yellow
-& gcloud config set project $PROJECT_ID
-& gcloud config set run/region $REGION
+& gcloud config set project $PROJECT_ID --quiet
+& gcloud config set run/region $REGION --quiet
 
 # 3. Enable required APIs
 Write-Host "[3/6] Enabling Cloud Run & Cloud Build APIs..." -ForegroundColor Yellow

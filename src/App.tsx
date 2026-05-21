@@ -203,6 +203,7 @@ export default function App() {
   // Admin Board State
   const [allBookings, setAllBookings] = useState<any[]>([]);
   const [registeredUsers, setRegisteredUsers] = useState<UserData[]>([]);
+  const [liveEvents, setLiveEvents] = useState<string[]>([]);
 
   // Mobile Menu Navigation Drawer State
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -269,6 +270,34 @@ export default function App() {
   useEffect(() => {
     fetchDashboardData();
   }, [token, user]);
+
+  useEffect(() => {
+    if (!token) return;
+
+    const events = new EventSource(`${apiPrefix}/events?token=${encodeURIComponent(token)}`);
+
+    events.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload?.type === 'booking.update' || payload?.type === 'booking.create') {
+          fetchDashboardData();
+        }
+        if (payload?.message) {
+          setLiveEvents((current) => [payload.message, ...current].slice(0, 6));
+        }
+      } catch (err) {
+        console.warn('Invalid SSE payload received', err);
+      }
+    };
+
+    events.onerror = () => {
+      events.close();
+    };
+
+    return () => {
+      events.close();
+    };
+  }, [token, apiPrefix]);
 
   useEffect(() => {
     const syncWithBackend = async () => {
@@ -365,7 +394,7 @@ export default function App() {
             }, 
             regionCode: region 
           }));
-          Logger.success('GeoLocation', `📍 Location acquired: ${resolvedAddress || 'Unknown'}`, { lat: latitude, lng: longitude, region });
+          Logger.success('GeoLocation', `Location acquired: ${resolvedAddress || 'Unknown'}`, { lat: latitude, lng: longitude, region });
         },
         (error) => {
           Logger.warn('GeoLocation', 'GPS access denied or unavailable', { code: error.code });
@@ -1051,7 +1080,7 @@ export default function App() {
 
                     {state.userLocation?.address && (
                       <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest mr-2">📍 Live GPS Address Node:</span>
+                        <span className="text-[10px] font-black text-text-secondary uppercase tracking-widest mr-2">Live GPS Address:</span>
                         <button 
                           type="button"
                           onClick={() => {
@@ -1065,7 +1094,7 @@ export default function App() {
                           }}
                           className="text-[10px] font-bold bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white px-3.5 py-1.5 rounded-full transition-all flex items-center gap-1.5 shadow-sm shadow-accent/5 cursor-pointer hover:scale-[1.02] active:scale-95"
                         >
-                          <span className="animate-pulse">📍</span> Use My Live Location: <span className="underline font-extrabold">{state.userLocation.address}</span>
+                          <span className="animate-pulse">Live</span> Use My Live Location: <span className="underline font-extrabold">{state.userLocation.address}</span>
                         </button>
                       </div>
                     )}
@@ -1077,7 +1106,7 @@ export default function App() {
                         onClick={() => handleCategoryClick("I need a plumber for water leak repair in Gulberg Lahore")}
                         className="text-[10px] font-bold bg-slate-100/80 border border-slate-200 hover:border-accent hover:text-accent px-3 py-1.5 rounded-full transition-all text-text-secondary"
                       >
-                        🔧 Plumber
+                        Plumber
                       </button>
                       <button 
                         onClick={() => handleCategoryClick("Need an electrician urgent short circuit fault repair")}
@@ -1095,7 +1124,7 @@ export default function App() {
                         onClick={() => handleCategoryClick("Require AC compressor servicing technician in Karachi Sindh Pakistan")}
                         className="text-[10px] font-bold bg-accent/10 border border-accent/30 text-accent hover:bg-accent hover:text-white px-3 py-1.5 rounded-full transition-all"
                       >
-                        📍 AC Karachi (Test Location)
+                        AC Karachi (Test Location)
                       </button>
                     </div>
 
@@ -1724,7 +1753,7 @@ export default function App() {
                       <div className="text-right">
                         <span className={cn(
                           "text-[9px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider border",
-                          u.role === 'customer' ? "bg-blue-500/10 text-blue-650 border-blue-200/50" :
+                          u.role === 'customer' ? "bg-purple-500/10 text-purple-200 border-purple-200/50" :
                           u.role === 'provider' ? "bg-accent/10 text-accent border-accent/20" : "bg-purple-500/10 text-purple-650 border-purple-200/50"
                         )}>
                           {u.role}

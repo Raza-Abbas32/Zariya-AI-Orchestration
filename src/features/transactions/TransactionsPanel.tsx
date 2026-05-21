@@ -108,7 +108,7 @@ export default function TransactionsPanel({ history }: TransactionsPanelProps) {
                       <span className={`inline-block px-2 py-0.5 rounded text-[8px] font-black uppercase tracking-wider ${
                         tx.status === 'Completed' 
                           ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-                          : 'bg-blue-150 text-blue-700 border border-blue-200'
+                          : 'bg-[#22164a] text-purple-200 border border-purple-500/20'
                       }`}>
                         {tx.status}
                       </span>

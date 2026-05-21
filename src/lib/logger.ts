@@ -28,7 +28,7 @@ function generateTraceId(): string {
 /** Start a new trace session (call at app init or on new service request) */
 export function startTrace(): string {
   _traceId = generateTraceId();
-  info('Orchestrator', `🔍 New trace session started`, { traceId: _traceId });
+  info('Orchestrator', `New trace session started`, { traceId: _traceId });
   return _traceId;
 }
 
@@ -68,17 +68,17 @@ function writeLog(level: LogLevel, agent: string, message: string, data?: unknow
 
   // Styled console output
   const icons: Record<LogLevel, string> = {
-    debug:   '🔧',
-    info:    'ℹ️ ',
-    warn:    '⚠️ ',
-    error:   '❌',
-    trace:   '🔍',
-    success: '✅'
+    debug:   '[DEBUG]',
+    info:    '[INFO]',
+    warn:    '[WARN]',
+    error:   '[ERROR]',
+    trace:   '[TRACE]',
+    success: '[SUCCESS]'
   };
 
   const colors: Record<LogLevel, string> = {
     debug:   '#94a3b8',
-    info:    '#60a5fa',
+    info:    '#7c3aed',
     warn:    '#fbbf24',
     error:   '#f87171',
     trace:   '#a78bfa',
@@ -111,15 +111,15 @@ export const success = (agent: string, msg: string, data?: unknown) => writeLog(
  */
 export async function timed<T>(agent: string, label: string, fn: () => Promise<T>): Promise<T> {
   const start = performance.now();
-  trace(agent, `⏱ Starting: ${label}`);
+  trace(agent, `Timer started: ${label}`);
   try {
     const result = await fn();
     const ms = Math.round(performance.now() - start);
-    success(agent, `⏱ Completed: ${label}`, { durationMs: ms });
+    success(agent, `Timer completed: ${label}`, { durationMs: ms });
     return result;
   } catch (e) {
     const ms = Math.round(performance.now() - start);
-    error(agent, `⏱ Failed: ${label}`, { durationMs: ms, error: e });
+    error(agent, `Timer failed: ${label}`, { durationMs: ms, error: e });
     throw e;
   }
 }

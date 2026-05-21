@@ -33,7 +33,7 @@ export default function TrustAnalysisPanel({ provider }: TrustAnalysisPanelProps
           value={provider.metrics.reliability}
         />
         <MetricCard 
-          icon={<CheckCircle2 className="w-3 h-3 text-blue-500" />}
+          icon={<CheckCircle2 className="w-3 h-3 text-purple-300" />}
           label="Consistency"
           value={provider.metrics.consistency}
         />

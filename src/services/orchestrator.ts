@@ -29,7 +29,7 @@ export class ZariyaOrchestrator {
   constructor(initialState: OrchestrationState, setState: (state: OrchestrationState) => void) {
     this.state = initialState;
     this.setState = setState;
-    Logger.info('Orchestrator', '🚀 ZariyaOrchestrator initialized');
+    Logger.info('Orchestrator', 'ZariyaOrchestrator initialized');
   }
 
   private updateState(patch: Partial<OrchestrationState>) {

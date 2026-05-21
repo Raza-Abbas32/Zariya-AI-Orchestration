@@ -59,6 +59,33 @@ app.use(cors({
 
 app.use(express.json({ limit: '10kb' }));
 
+const JWT_SECRET = process.env.JWT_SECRET || 'zariya_dev_secret_token';
+const isProduction = process.env.NODE_ENV === 'production';
+if (isProduction && !process.env.JWT_SECRET) {
+  console.error('JWT_SECRET is required in production. Set JWT_SECRET securely in your environment.');
+  process.exit(1);
+}
+
+const sseClients = new Set();
+function sendEvent(res, event, payload) {
+  try {
+    res.write(`event: ${event}\n`);
+    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+  } catch (error) {
+    console.warn('SSE payload write failed', error);
+  }
+}
+
+function broadcastEvent(type, payload) {
+  for (const client of [...sseClients]) {
+    if (!client.writableEnded) {
+      sendEvent(client, 'booking', { type, ...payload });
+    } else {
+      sseClients.delete(client);
+    }
+  }
+}
+
 // 3. Structured JSON Request Logger Middleware
 app.use((req, res, next) => {
   const start = Date.now();
@@ -182,7 +209,7 @@ const authenticateToken = (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1];
   if (!token) return res.status(401).json({ error: "Access token missing" });
 
-  jwt.verify(token, process.env.JWT_SECRET || 'zariya_secret_token_key', (err, user) => {
+  jwt.verify(token, JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: "Invalid token" });
     req.user = user;
     next();
@@ -216,6 +243,34 @@ app.get('/health', async (req, res) => {
     }
   };
   res.json(systemInfo);
+});
+
+app.get('/api/events', (req, res) => {
+  const token = req.query.token;
+  if (!token || typeof token !== 'string') {
+    return res.status(401).json({ error: 'Authorization required for real-time updates.' });
+  }
+
+  jwt.verify(token, JWT_SECRET, (err) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid token for event subscription.' });
+    }
+
+    res.set({
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache, no-transform',
+      Connection: 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+
+    res.flushHeaders?.();
+    sendEvent(res, 'ready', { message: 'Subscribed to booking updates.' });
+
+    sseClients.add(res);
+    req.on('close', () => {
+      sseClients.delete(res);
+    });
+  });
 });
 
 // Register endpoint
@@ -310,7 +365,7 @@ app.post('/api/auth/login', authLimiter, async (req, res, next) => {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, name: user.name, role: user.role },
-      process.env.JWT_SECRET || 'zariya_secret_token_key',
+      JWT_SECRET,
       { expiresIn: '24h' }
     );
 
@@ -365,22 +420,35 @@ app.patch('/api/bookings/:bookingId/status', authenticateToken, async (req, res,
     return res.status(400).json({ error: "Valid status is required" });
   }
 
+  if (req.user.role !== 'admin' && req.user.role !== 'provider') {
+    return res.status(403).json({ error: "Only providers and admins can update booking status." });
+  }
+
   try {
     let updatedBooking = null;
 
     if (useMongoDB) {
+      const existingBooking = await Booking.findOne({ id: bookingId });
+      if (!existingBooking) return res.status(404).json({ error: "Booking not found" });
+      if (req.user.role === 'provider' && existingBooking.provider?.id !== req.user.id) {
+        return res.status(403).json({ error: "Providers can only update their own bookings." });
+      }
+
       updatedBooking = await Booking.findOneAndUpdate(
         { id: bookingId },
         { status },
         { new: true }
       );
-      if (!updatedBooking) return res.status(404).json({ error: "Booking not found" });
     } else {
       const bookings = JSON.parse(fs.readFileSync(DB_FILE, 'utf-8'));
       const bookingIndex = bookings.findIndex(b => b.id === bookingId);
       
       if (bookingIndex === -1) {
         return res.status(404).json({ error: "Booking not found" });
+      }
+
+      if (req.user.role === 'provider' && bookings[bookingIndex].provider?.id !== req.user.id) {
+        return res.status(403).json({ error: "Providers can only update their own bookings." });
       }
 
       bookings[bookingIndex].status = status;
@@ -395,6 +463,14 @@ app.patch('/api/bookings/:bookingId/status', authenticateToken, async (req, res,
         console.warn("Firestore status update failed:", dbError.message);
       }
     }
+
+    broadcastEvent('booking.status.update', {
+      bookingId: updatedBooking.id,
+      status: updatedBooking.status,
+      provider: updatedBooking.provider?.name || null,
+      location: updatedBooking.intent?.location || null,
+      timestamp: updatedBooking.timestamp || new Date().toISOString()
+    });
 
     res.json({ success: true, booking: updatedBooking });
   } catch (error) {
@@ -446,7 +522,8 @@ app.post('/api/bookings', authenticateToken, async (req, res, next) => {
         language: sanitizeInput(intent.language)
       },
       status: 'Pending',
-      isSoftDeleted: false
+      isSoftDeleted: false,
+      timestamp: new Date().toISOString()
     };
 
     if (useMongoDB) {
@@ -472,6 +549,14 @@ app.post('/api/bookings', authenticateToken, async (req, res, next) => {
     } catch (mailError) {
       console.warn("[Server] Notification dispatches failed:", mailError.message);
     }
+
+    broadcastEvent('booking.create', {
+      bookingId: newBooking.id,
+      status: newBooking.status,
+      provider: newBooking.provider.name,
+      location: newBooking.intent.location,
+      timestamp: newBooking.timestamp
+    });
 
     res.status(201).json({ success: true, booking: newBooking });
   } catch (error) {

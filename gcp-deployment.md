@@ -1,5 +1,5 @@
 # Google Cloud Platform (GCP) Deployment Handbook
-## Project: Sagheer-321
+## Project: AISeekhoProject
 ## Target Service: Zariya AI Portal
 
 This comprehensive deployment handbook outlines the end-to-end production pipeline for deploying the containerized Zariya AI Portal app to **Google Cloud Run** using **Google Cloud Build** and **Google Artifact Registry**.
@@ -7,9 +7,9 @@ This comprehensive deployment handbook outlines the end-to-end production pipeli
 ---
 
 ### Prerequisites & Credentials
-- **GCP Project ID**: `Sagheer-321`
-- **Owner Email**: `mjan8066m@gmail.com`
-- **Region**: `us-central1` (or your preferred regional zone close to your Pakistani target audience)
+- **GCP Project ID**: `AISeekhoProject`
+- **Owner Email**: `shahnazmemon50@gmail.com`
+- **Region**: `asia-south1` (or your preferred regional zone close to your Pakistani target audience)
 - **Port**: `3001` (Internal Container Port)
 
 ---

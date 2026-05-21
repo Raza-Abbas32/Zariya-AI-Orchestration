@@ -4,116 +4,117 @@
 @theme {
   --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
-  /* Futuristic Deep Royal Purple Brand Identity */
+
   --color-accent: #5503A5;
-  --color-accent-glow: rgba(85, 3, 165, 0.15);
-  
-  --color-purple-accent: #7c3aed;
-  --color-purple-glow: rgba(124, 58, 237, 0.12);
-  
-  --color-cyber-pink: #db2777;
-  --color-cyber-pink-glow: rgba(219, 39, 119, 0.1);
+  --color-accent-soft: rgba(85, 3, 165, 0.18);
+  --color-accent-strong: #4c0f9f;
+  --color-muted: #9097b2;
 
-  --color-success-neon: #059669;
-  --color-success-glow: rgba(5, 150, 105, 0.1);
-
-  /* Premium Light Theme Colors */
-  --color-bg-dark: #f8fafc;
-  --color-deep-navy: #ffffff;
-  --color-card-bg: rgba(255, 255, 255, 0.8);
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-border: rgba(148, 163, 184, 0.16);
+  --color-bg-dark: #090b16;
+  --color-surface: rgba(12, 18, 36, 0.92);
+  --color-surface-strong: rgba(10, 14, 27, 0.96);
+  --color-border: rgba(124, 58, 237, 0.18);
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #6b7280;
+  --color-card: rgba(11, 15, 29, 0.92);
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #f87171;
 }
 
 @layer base {
-  body {
-    @apply bg-bg-dark text-text-primary antialiased selection:bg-accent selection:text-white;
-    font-family: var(--font-sans);
+  html {
+    scroll-behavior: smooth;
   }
 
-  /* Futuristic Elegant Custom Scrollbar */
+  body {
+    @apply bg-[#090b16] text-text-primary antialiased selection:bg-accent selection:text-white;
+    font-family: var(--font-sans);
+    line-height: 1.6;
+    min-height: 100vh;
+    background: radial-gradient(circle at top left, rgba(85, 3, 165, 0.12), transparent 25%),
+      radial-gradient(circle at bottom right, rgba(124, 58, 237, 0.09), transparent 24%),
+      linear-gradient(180deg, #05060f 0%, #090b16 100%);
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  button, input, textarea, select {
+    font: inherit;
+  }
+
+  ::selection {
+    background: rgba(85, 3, 165, 0.22);
+    color: white;
+  }
+
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
   }
+
   ::-webkit-scrollbar-track {
-    background: rgba(241, 245, 249, 0.5);
+    background: rgba(15, 23, 42, 0.72);
   }
+
   ::-webkit-scrollbar-thumb {
-    background: rgba(148, 163, 184, 0.3);
+    background: rgba(85, 3, 165, 0.34);
     border-radius: 9999px;
   }
+
   ::-webkit-scrollbar-thumb:hover {
-    background: var(--color-accent);
-    box-shadow: 0 0 8px var(--color-accent-glow);
+    background: rgba(85, 3, 165, 0.58);
   }
 }
 
-/* Elegant Light Neon Typography Glows */
-.glow-text-cyan {
-  text-shadow: 0 0 10px var(--color-accent-glow), 0 0 1px var(--color-accent);
-}
-
-.glow-text-purple {
-  text-shadow: 0 0 10px var(--color-purple-glow), 0 0 1px var(--color-purple-accent);
-}
-
-.glow-text-green {
-  text-shadow: 0 0 10px var(--color-success-glow), 0 0 1px var(--color-success-neon);
-}
-
-/* Glowing Border System for Lighter Surfaces */
-.glow-border-cyan {
-  box-shadow: 0 0 15px rgba(85, 3, 165, 0.05), inset 0 0 10px rgba(85, 3, 165, 0.02);
-  border-color: rgba(85, 3, 165, 0.25);
-}
-
-.glow-border-purple {
-  box-shadow: 0 0 15px rgba(124, 58, 237, 0.05), inset 0 0 10px rgba(124, 58, 237, 0.02);
-  border-color: rgba(124, 58, 237, 0.25);
-}
-
-/* Glassmorphism Premium Light Cyber Card */
 .cyber-panel {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.85) 100%);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(12, 18, 36, 0.92);
+  border: 1px solid rgba(124, 58, 237, 0.12);
+  backdrop-filter: blur(18px);
 }
 
 .cyber-panel-glow {
-  box-shadow: 0 8px 32px 0 rgba(148, 163, 184, 0.12), 0 0 1px 1px rgba(255, 255, 255, 0.8) inset;
+  box-shadow: 0 22px 55px rgba(85, 3, 165, 0.12), inset 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
-/* Hexagon background pattern adapted for white screens */
 .cyber-grid {
-  background-size: 30px 30px;
-  background-image: 
-    linear-gradient(to right, rgba(85, 3, 165, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(85, 3, 165, 0.03) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
 }
 
-/* Scanline Overlay Animation */
+.glow-border-cyan {
+  box-shadow: 0 0 16px rgba(85, 3, 165, 0.08), inset 0 0 18px rgba(85, 3, 165, 0.05);
+  border-color: rgba(124, 58, 237, 0.25);
+}
+
+.glow-border-purple {
+  box-shadow: 0 0 16px rgba(124, 58, 237, 0.09), inset 0 0 18px rgba(124, 58, 237, 0.05);
+  border-color: rgba(124, 58, 237, 0.25);
+}
+
 @keyframes scanline {
-  0% { transform: translateY(-100%); }
-  100% { transform: translateY(100%); }
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100%);
+  }
 }
 
 .scanline::after {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(to bottom, transparent 0%, rgba(85, 3, 165, 0.015) 50%, transparent 100%);
-  animation: scanline 16s linear infinite;
+  inset: 0;
+  background: linear-gradient(to bottom, transparent 0%, rgba(85, 3, 165, 0.02) 50%, transparent 100%);
+  animation: scanline 18s linear infinite;
   pointer-events: none;
   z-index: 10;
 }
 
-/* Ripple Pulse Animation */
 @keyframes map-ripple {
   0% {
     transform: scale(0.5);
@@ -129,24 +130,12 @@
   animation: map-ripple 2.5s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
 }
 
-/* Typing text cursor caret */
-.cursor-caret::after {
-  content: "|";
-  animation: blink 0.8s infinite;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 0; }
-  50% { opacity: 1; }
-}
-
-/* Pulse Glow Keyframe */
 @keyframes pulse-glow {
   0%, 100% {
-    box-shadow: 0 0 8px var(--color-accent-glow), 0 0 2px rgba(85, 3, 165, 0.3);
+    box-shadow: 0 0 8px rgba(85, 3, 165, 0.18), 0 0 2px rgba(85, 3, 165, 0.35);
   }
   50% {
-    box-shadow: 0 0 16px rgba(85, 3, 165, 0.25), 0 0 4px rgba(85, 3, 165, 0.5);
+    box-shadow: 0 0 18px rgba(85, 3, 165, 0.25), 0 0 4px rgba(85, 3, 165, 0.55);
   }
 }
 
