@@ -11,6 +11,7 @@ import {
 import { OrchestrationState, AgentLog, Intent, Provider, ChatMessage } from "../types";
 import { NotificationService } from "./notifications";
 import * as Logger from "../lib/logger";
+import { isDemoMode, saveDemoSession } from "../lib/demoApi";
 
 export class ZariyaOrchestrator {
   private state: OrchestrationState;
@@ -296,6 +297,11 @@ export class ZariyaOrchestrator {
 
   private async syncSessionWithBackend(messages: ChatMessage[]) {
     try {
+      if (isDemoMode()) {
+        saveDemoSession(this.state.sessionId || 'demo-session', messages);
+        return;
+      }
+
       const apiPrefix = this.notifications['getApiUrl']();
       await fetch(`${apiPrefix}/sessions`, {
         method: 'POST',

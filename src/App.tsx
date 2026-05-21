@@ -49,6 +49,16 @@ import ParametersPanel from './features/dashboard/ParametersPanel';
 import SystemHealthPanel from './features/analytics/SystemHealthPanel';
 import TransactionsPanel from './features/transactions/TransactionsPanel';
 import * as Logger from './lib/logger';
+import {
+  DEMO_USERS,
+  createDemoAuthPayload,
+  getDemoApiPrefix,
+  getDemoDashboardData,
+  getDemoSessions,
+  isDemoMode,
+  saveDemoSession,
+  upsertDemoBookingStatus
+} from './lib/demoApi';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -218,13 +228,32 @@ export default function App() {
   const [provSuccess, setProvSuccess] = useState('');
   const [isProvisioning, setIsProvisioning] = useState(false);
 
-  const apiPrefix = import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes('your-backend-url')
+  const apiPrefix = isDemoMode()
+    ? getDemoApiPrefix()
+    : import.meta.env.VITE_API_URL && !import.meta.env.VITE_API_URL.includes('your-backend-url')
     ? import.meta.env.VITE_API_URL
     : (import.meta.env.PROD ? window.location.origin + '/api' : 'http://localhost:3001/api');
 
   // Load Bookings for dashboards
   const fetchDashboardData = async () => {
     if (!token) return;
+
+    if (isDemoMode()) {
+      const demoSession = getDemoSessions(state.sessionId || 'demo-session');
+      const demoRole = user?.role || 'customer';
+      const demoDashboard = getDemoDashboardData(demoRole);
+
+      if (demoRole === 'provider') {
+        setProviderBookings(demoDashboard.providerBookings);
+      } else if (demoRole === 'admin') {
+        setAllBookings(demoDashboard.allBookings);
+        setRegisteredUsers(Object.values(DEMO_USERS) as UserData[]);
+      }
+
+      setState(s => ({ ...s, messages: demoSession.messages }));
+      return;
+    }
+
     try {
       const response = await fetch(`${apiPrefix}/bookings`, {
         headers: { 'Authorization': `Bearer ${token}` }
@@ -274,6 +303,10 @@ export default function App() {
   useEffect(() => {
     if (!token) return;
 
+    if (isDemoMode()) {
+      return;
+    }
+
     const events = new EventSource(`${apiPrefix}/events?token=${encodeURIComponent(token)}`);
 
     events.onmessage = (event) => {
@@ -301,6 +334,13 @@ export default function App() {
 
   useEffect(() => {
     const syncWithBackend = async () => {
+      if (isDemoMode()) {
+        const session = getDemoSessions(state.sessionId || 'demo-session');
+        saveDemoSession(state.sessionId || 'demo-session', state.messages);
+        setState(s => ({ ...s, messages: session.messages }));
+        return;
+      }
+
       try {
         const headers: HeadersInit = {};
         if (token) {
@@ -642,6 +682,32 @@ export default function App() {
       return;
     }
 
+    const demoModeEnabled = isDemoMode();
+    const normalizedEmail = emailInput.trim().toLowerCase();
+
+    if (demoModeEnabled) {
+      if (authTab !== 'login') {
+        setAuthError('Demo mode only supports sign in with approved test accounts.');
+        return;
+      }
+
+      const authPayload = createDemoAuthPayload(normalizedEmail);
+      if (!authPayload || passwordInput !== 'password123') {
+        setAuthError('Invalid demo credentials. Use an approved test account with password123.');
+        return;
+      }
+
+      localStorage.setItem('zariya_token', authPayload.token);
+      localStorage.setItem('zariya_user', JSON.stringify(authPayload.user));
+      setToken(authPayload.token);
+      setUser(authPayload.user);
+
+      setEmailInput('');
+      setPasswordInput('');
+      setNameInput('');
+      return;
+    }
+
     try {
       const endpoint = authTab === 'login' ? 'login' : 'register';
       const body = authTab === 'login' 
@@ -693,6 +759,24 @@ export default function App() {
     }
     setIsProvisioning(true);
 
+    if (isDemoMode()) {
+      const demoUser: UserData = {
+        id: `demo_${provRole}_${Date.now()}`,
+        email: provEmail,
+        name: provName,
+        role: provRole,
+        specialty: provRole === 'provider' ? provSpecialty : undefined
+      };
+
+      setProvSuccess(`Account Node for ${provName} successfully provisioned in demo mode!`);
+      setProvName('');
+      setProvEmail('');
+      setProvPassword('');
+      setRegisteredUsers((current) => [...current, demoUser]);
+      setIsProvisioning(false);
+      return;
+    }
+
     try {
       const body = {
         email: provEmail,
@@ -730,6 +814,18 @@ export default function App() {
   };
 
   const updateBookingStatus = async (bookingId: string, newStatus: string) => {
+    if (isDemoMode()) {
+      const updated = upsertDemoBookingStatus(bookingId, newStatus === 'Completed' ? 'Completed' : newStatus === 'Confirmed' ? 'Confirmed' : 'Cancelled');
+      if (updated) {
+        setState(s => ({
+          ...s,
+          history: s.history.map(h => h.id === bookingId ? { ...h, status: newStatus === 'Completed' ? 'Completed' as const : 'Processing' as const } : h)
+        }));
+        fetchDashboardData();
+      }
+      return;
+    }
+
     try {
       const response = await fetch(`${apiPrefix}/bookings/${bookingId}/status`, {
         method: 'PATCH',

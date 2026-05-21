@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HeartPulse, Cpu, Database, Server, RefreshCw, Terminal } from 'lucide-react';
+import { getDemoHealth, isDemoMode } from '../../lib/demoApi';
 
 interface HealthData {
   status: string;
@@ -25,6 +26,11 @@ export default function SystemHealthPanel() {
 
   const fetchHealth = async () => {
     try {
+      if (isDemoMode()) {
+        setHealth(getDemoHealth());
+        return;
+      }
+
       // In development the server runs on 3001, otherwise serves on same host
       const apiPrefix = import.meta.env.PROD ? '' : 'http://localhost:3001';
       const res = await fetch(`${apiPrefix}/health`);
